@@ -1,0 +1,601 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.app {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 290px 1fr;
+  background: #0f172a;
+}
+
+.sidebar {
+  background: #111827;
+  border-right: 1px solid #334155;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.logo {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 14px;
+  background: #22d3ee;
+  color: #020617;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+}
+
+h1 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.brand p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+button {
+  border: none;
+  border-radius: 14px;
+  padding: 15px;
+  background: #22d3ee;
+  color: #020617;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+button:hover {
+  background: #67e8f9;
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+.small {
+  width: auto;
+  background: #334155;
+  color: #f8fafc;
+  padding: 12px 18px;
+}
+
+.small:hover {
+  background: #475569;
+}
+
+.secondary-button {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.secondary-button:hover {
+  background: #475569;
+}
+
+.box {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 14px;
+  margin-top: 6px;
+}
+
+.box span {
+  display: block;
+  color: #94a3b8;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.box strong {
+  color: #67e8f9;
+}
+
+.box p {
+  margin: 0;
+  color: #cbd5e1;
+  word-break: break-all;
+}
+
+.main {
+  width: 100%;
+  height: 100vh;
+  padding: 18px;
+  overflow: hidden;
+}
+
+.home {
+  width: 100%;
+  height: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px;
+}
+
+.home h2 {
+  font-size: 46px;
+  margin: 0 0 14px;
+}
+
+.home p {
+  color: #cbd5e1;
+  max-width: 600px;
+  line-height: 1.6;
+}
+
+.home-grid {
+  width: min(680px, 100%);
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.whatsapp,
+.ipad-panel {
+  width: 100%;
+  height: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  min-height: 82px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.topbar h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.topbar p {
+  margin: 5px 0 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.webview {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: white;
+}
+
+.ipad-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  padding: 8px 12px;
+  border: 1px solid #475569;
+  border-radius: 999px;
+  background: #334155;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.status-badge.success {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+.ipad-content {
+  padding: 20px;
+  display: grid;
+  gap: 15px;
+  overflow-y: auto;
+}
+
+.ipad-card {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 16px;
+  border: 1px solid #334155;
+  border-radius: 18px;
+  background: #0f172a;
+}
+
+.ipad-card h3 {
+  margin: 0 0 7px;
+  font-size: 19px;
+}
+
+.ipad-card p {
+  margin: 0 0 15px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.step-number {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #22d3ee;
+  color: #020617;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.form-area {
+  min-width: 0;
+}
+
+.form-area label {
+  display: block;
+  margin: 15px 0 8px;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.form-area input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #475569;
+  border-radius: 12px;
+  outline: none;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 15px;
+}
+
+.form-area input:focus {
+  border-color: #22d3ee;
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+}
+
+.inline-buttons,
+.control-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.event-input {
+  max-width: 180px;
+  display: flex;
+  align-items: center;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.event-input span {
+  padding: 0 0 0 13px;
+  color: #94a3b8;
+  font-weight: 800;
+}
+
+.event-input input {
+  border: none;
+  box-shadow: none;
+}
+
+
+
+.input-output {
+  max-height: 230px;
+  margin: 15px 0 0;
+  padding: 15px;
+  overflow: auto;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #020617;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ipad-help {
+  padding: 18px 20px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 18px;
+  background: rgba(34, 211, 238, 0.07);
+}
+
+.ipad-help h3 {
+  margin: 0;
+  color: #67e8f9;
+}
+
+.ipad-help ol {
+  margin-bottom: 0;
+  padding-left: 22px;
+}
+
+.ipad-help li {
+  margin: 8px 0;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 230px 1fr;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ipad-badges {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  html,
+  body,
+  #root {
+    overflow: auto;
+  }
+
+  .sidebar {
+    border-right: none;
+    border-bottom: 1px solid #334155;
+  }
+
+  .main {
+    height: auto;
+    min-height: 700px;
+  }
+
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ipad-card {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-buttons,
+  .control-buttons {
+    flex-direction: column;
+  }
+}
+
+.control-toggle {
+  min-width: 220px;
+  background: #22d3ee;
+  color: #020617;
+}
+
+.control-toggle:hover {
+  background: #67e8f9;
+}
+
+.control-toggle.active {
+  background: #f59e0b;
+  color: #1c1917;
+}
+
+.control-toggle.active:hover {
+  background: #fbbf24;
+}
+
+.input-list-button {
+  margin-bottom: 14px;
+  background: #22d3ee;
+  color: #020617;
+}
+
+.input-list-button:hover {
+  background: #67e8f9;
+}
+
+.input-list-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  transform: none;
+}
+
+.input-device-panel {
+  margin: 2px 0 18px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  background: #020617;
+}
+
+.input-device-title {
+  padding: 12px 14px;
+  border-bottom: 1px solid #334155;
+  background: #111827;
+  color: #67e8f9;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.input-device-panel pre {
+  max-height: 230px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  color: #cbd5e1;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.input-device-panel {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  background: #020617;
+}
+
+.input-device-title {
+  padding: 13px 16px;
+  border-bottom: 1px solid #334155;
+  background: #111827;
+  color: #67e8f9;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.input-device-panel pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 16px 20px;
+  overflow: auto;
+
+  color: #dbeafe;
+  font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.9;
+
+  text-align: left;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.input-device-panel pre::selection {
+  background: rgba(34, 211, 238, 0.3);
+  color: #ffffff;
+}
+
+.event-label {
+  margin-top: 18px;
+  margin-bottom: 8px;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.event-label {
+  margin-bottom: 8px;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.input-device-title small {
+  display: block;
+  margin-top: 5px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ios-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 8, 25, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.ios-dialog {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid rgba(92, 225, 255, 0.35);
+  border-radius: 20px;
+  background: #171b38;
+  color: #f5f7ff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+.ios-dialog h2 {
+  margin: 0 0 12px;
+  color: #53e3f5;
+}
+
+.ios-dialog p {
+  color: #c9cee4;
+  line-height: 1.6;
+}
+
+.ios-dialog ol {
+  margin: 18px 0 24px;
+  padding-left: 22px;
+  color: #e4e7f3;
+  line-height: 1.8;
+}
+
+.ios-dialog .control-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}

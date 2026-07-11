@@ -1,0 +1,361 @@
+const express = require("express");
+const cors = require("cors");
+const { exec, spawn } = require("child_process");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { GlobalKeyboardListener } = require("node-global-key-listener");
+
+const app = express();
+const PORT = 5050;
+
+const HIDCLIENT_PATH =
+  "/home/aslpardus/Projeler/communicatepars/tools/hidclient/hidclient";
+const X11_DISPLAY = process.env.DISPLAY || ":1";
+
+function resolveX11Authority() {
+  if (process.env.XAUTHORITY && fs.existsSync(process.env.XAUTHORITY)) {
+    return process.env.XAUTHORITY;
+  }
+
+  const uid = typeof process.getuid === "function" ? process.getuid() : 1000;
+  const runtimeDir = `/run/user/${uid}`;
+  const candidates = [path.join(runtimeDir, "gdm", "Xauthority")];
+
+  try {
+    for (const file of fs.readdirSync(runtimeDir)) {
+      if (file.startsWith(".mutter-Xwaylandauth.")) {
+        candidates.push(path.join(runtimeDir, file));
+      }
+    }
+  } catch (_) {
+    // Diğer adaylarla devam et.
+  }
+
+  candidates.push(path.join(os.homedir(), ".Xauthority"));
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  console.warn("[uyarı] Xauthority bulunamadı; -x özelliği çalışmayabilir.");
+  return path.join(os.homedir(), ".Xauthority");
+}
+
+const X11_AUTHORITY = resolveX11Authority();
+
+let hidclientProcess = null;
+let activeEventNumber = null;
+let ctrlPressed = false;
+const keyboard = new GlobalKeyboardListener();
+
+app.use(cors());
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  return res.json({
+    app: "CommunicatePars Local Server",
+    status: "running",
+  });
+});
+
+app.get("/devices", (req, res) => {
+  exec("adb devices", (error, stdout, stderr) => {
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: "adb devices çalıştırılamadı",
+        error: error.message,
+        stderr,
+      });
+    }
+
+    const devices = stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("List of devices"))
+      .map((line) => {
+        const [id, status] = line.split(/\s+/);
+        return { id, status };
+      });
+
+    return res.json({ success: true, devices });
+  });
+});
+
+app.post("/mirror", (req, res) => {
+  const child = exec("scrcpy -m1024", (error, stdout, stderr) => {
+    if (error) console.error("scrcpy hatası:", error.message);
+    if (stderr) console.error("scrcpy stderr:", stderr);
+    if (stdout) console.log("scrcpy stdout:", stdout);
+  });
+
+  return res.json({
+    success: true,
+    message: "Telefon yansıtma başlatıldı",
+    pid: child.pid,
+  });
+});
+
+app.get("/ipad/input/list", (req, res) => {
+  const args = [
+    "/usr/bin/env",
+    `DISPLAY=${X11_DISPLAY}`,
+    `XAUTHORITY=${X11_AUTHORITY}`,
+    HIDCLIENT_PATH,
+    "-l",
+  ];
+
+  const child = spawn("pkexec", args, {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.on("data", (data) => {
+    stdout += data.toString();
+  });
+
+  child.stderr.on("data", (data) => {
+    stderr += data.toString();
+  });
+
+  child.on("error", (error) => {
+    return res.status(500).json({
+      success: false,
+      message: "Input aygıtları listelenemedi",
+      error: error.message,
+    });
+  });
+
+  child.on("close", (code) => {
+    if (res.headersSent) return;
+
+    if (code !== 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Input aygıtları listelenemedi",
+        error: `hidclient -l hata kodu: ${code}`,
+        stderr,
+      });
+    }
+
+    return res.json({ success: true, output: stdout });
+  });
+});
+
+app.post("/ipad/control/start", (req, res) => {
+  const eventNumber = String(req.body.eventNumber || "").trim();
+
+  if (!/^[0-9]{1,2}$/.test(eventNumber)) {
+    return res.status(400).json({
+      success: false,
+      active: false,
+      message: "Geçerli bir event numarası gir",
+    });
+  }
+
+  if (hidclientProcess && hidclientProcess.exitCode === null) {
+    return res.json({
+      success: true,
+      active: true,
+      message: "iPad kontrol sistemi zaten çalışıyor",
+    });
+  }
+
+  activeEventNumber = eventNumber;
+
+  hidclientProcess = spawn(
+    "pkexec",
+    [
+      "/usr/bin/env",
+      `DISPLAY=${X11_DISPLAY}`,
+      `XAUTHORITY=${X11_AUTHORITY}`,
+      HIDCLIENT_PATH,
+      `-e${eventNumber}`,
+      "-x",
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] }
+  );
+
+  hidclientProcess.stdout.on("data", (data) => {
+    const message = data.toString().trim();
+    if (message) console.log(`[hidclient] ${message}`);
+  });
+
+  hidclientProcess.stderr.on("data", (data) => {
+    const message = data.toString().trim();
+    if (message) console.error(`[hidclient hata] ${message}`);
+  });
+
+  hidclientProcess.on("error", (error) => {
+    console.error("hidclient başlatma hatası:", error.message);
+    hidclientProcess = null;
+    activeEventNumber = null;
+  });
+
+  hidclientProcess.on("close", (code) => {
+    console.log(`hidclient kapandı. Kod: ${code}`);
+    hidclientProcess = null;
+  });
+
+  return res.json({
+    success: true,
+    active: true,
+    message:
+      "Kontrol sistemi hazır. Şimdi iPad Bluetooth ayarlarından CommunicatePars-Mouse cihazına yeniden bağlan.",
+  });
+});
+
+function stopHidclient() {
+  exec("pkexec /usr/bin/pkill -9 -x hidclient");
+
+  if (hidclientProcess) {
+    try {
+      hidclientProcess.kill("SIGKILL");
+    } catch (_) {
+      // Süreç zaten kapandıysa devam et.
+    }
+  }
+
+  hidclientProcess = null;
+}
+
+function restoreMouse(eventNumber, callback) {
+  if (!eventNumber) {
+    callback(null, "Event numarası yok; yalnızca hidclient kapatıldı.");
+    return;
+  }
+
+  const script = `
+EVENT_PATH=$(readlink -f /sys/class/input/event${eventNumber}/device 2>/dev/null)
+if [ -z "$EVENT_PATH" ]; then
+  udevadm trigger --action=add --subsystem-match=input
+  echo "Event yolu bulunamadı; udev tetiklendi."
+  exit 0
+fi
+
+CURRENT="$EVENT_PATH"
+USB_DEVICE=""
+
+while [ "$CURRENT" != "/" ]; do
+  if [ -f "$CURRENT/idVendor" ] && [ -f "$CURRENT/idProduct" ]; then
+    USB_DEVICE=$(basename "$CURRENT")
+    break
+  fi
+  CURRENT=$(dirname "$CURRENT")
+done
+
+if [ -n "$USB_DEVICE" ] && [ -e "/sys/bus/usb/drivers/usb/$USB_DEVICE" ]; then
+  echo "$USB_DEVICE" > /sys/bus/usb/drivers/usb/unbind
+  sleep 1
+  echo "$USB_DEVICE" > /sys/bus/usb/drivers/usb/bind
+  echo "USB mouse yeniden bağlandı: $USB_DEVICE"
+else
+  udevadm trigger --action=add --subsystem-match=input
+  echo "USB aygıtı bulunamadı; udev tetiklendi."
+fi
+`;
+
+  const child = spawn("pkexec", ["/bin/bash", "-c", script], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.on("data", (data) => {
+    stdout += data.toString();
+  });
+
+  child.stderr.on("data", (data) => {
+    stderr += data.toString();
+  });
+
+  child.on("close", (code) => {
+    if (code !== 0) {
+      callback(new Error(stderr || `Mouse geri yükleme hata kodu: ${code}`));
+      return;
+    }
+    callback(null, stdout.trim() || "Mouse Pardus'a geri verildi.");
+  });
+}
+
+function stopIpadControlFromShortcut() {
+  console.log("CTRL + K ile iPad kontrolü kapatılıyor");
+  const eventNumber = activeEventNumber;
+  activeEventNumber = null;
+  stopHidclient();
+  restoreMouse(eventNumber, (error, output) => {
+    if (error) console.error("Mouse geri yükleme hatası:", error.message);
+    else console.log(output);
+  });
+}
+
+app.post("/ipad/control/stop", (req, res) => {
+  console.log("STOP endpoint çağrıldı");
+
+  const eventNumber = activeEventNumber;
+  activeEventNumber = null;
+  stopHidclient();
+
+  restoreMouse(eventNumber, (error, output) => {
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        active: false,
+        message: "hidclient kapatıldı ancak mouse geri yüklenemedi",
+        error: error.message,
+      });
+    }
+
+    return res.json({
+      success: true,
+      active: false,
+      message: output || "iPad kontrolü kapatıldı; mouse Pardus'a geri verildi.",
+    });
+  });
+});
+
+app.get("/ipad/control/status", (req, res) => {
+  const active =
+    hidclientProcess !== null && hidclientProcess.exitCode === null;
+  return res.json({ success: true, active });
+});
+
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    message: "API adresi bulunamadı",
+  });
+});
+
+app.use((error, req, res, next) => {
+  console.error("Server hatası:", error);
+  return res.status(500).json({
+    success: false,
+    message: "Beklenmeyen server hatası",
+  });
+});
+
+keyboard.addListener((event) => {
+  if (event.name === "LEFT CTRL" && event.state === "DOWN") {
+    ctrlPressed = true;
+  }
+
+  if (event.name === "LEFT CTRL" && event.state === "UP") {
+    ctrlPressed = false;
+  }
+
+  if (ctrlPressed && event.name === "K" && event.state === "DOWN") {
+    stopIpadControlFromShortcut();
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`CommunicatePars Local Server çalışıyor: http://localhost:${PORT}`);
+  console.log(`X11 ekranı: ${X11_DISPLAY}`);
+  console.log(`X11 authority: ${X11_AUTHORITY}`);
+  console.log("Acil kapatma kısayolu: Sol Ctrl + K");
+});
