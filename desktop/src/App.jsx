@@ -9,6 +9,7 @@ function App() {
   const [panel, setPanel] = useState("home");
   const [inputEvent, setInputEvent] = useState("8");
   const [ipadControlActive, setIpadControlActive] = useState(false);
+  const [airplayActive, setAirplayActive] = useState(false);
   const [inputDevices, setInputDevices] = useState("");
   const [inputListLoading, setInputListLoading] = useState(false);
 
@@ -62,6 +63,29 @@ function App() {
     }
   };
 
+  const startAirplay = async () => {
+    try {
+      setStatus("AirPlay alıcısı başlatılıyor...");
+      const data = await requestJson("/airplay/start", { method: "POST" });
+      setAirplayActive(Boolean(data.active));
+      setStatus(data.message);
+    } catch (error) {
+      console.error(error);
+      setAirplayActive(false);
+      setStatus(error.message || "AirPlay başlatılamadı");
+    }
+  };
+  const stopAirplay = async () => {
+    try {
+      setStatus("AirPlay alıcısı kapatılıyor...");
+      const data = await requestJson("/airplay/stop", { method: "POST" });
+      setAirplayActive(false);
+      setStatus(data.message);
+    } catch (error) {
+      console.error(error);
+      setStatus(error.message || "AirPlay kapatılamadı");
+    }
+  };
   const listInputDevices = async () => {
     try {
       setInputListLoading(true);
@@ -130,6 +154,7 @@ function App() {
         <button onClick={scanDevices}>Telefonu Tara</button>
         <button onClick={mirrorPhone}>Telefonu Yansıt</button>
         <button onClick={() => setPanel("ipad")}>iPad Kontrol</button>
+        <button onClick={() => setPanel("airplay")}>AirPlay</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
         <div className="box">
@@ -148,14 +173,15 @@ function App() {
           <section className="home">
             <h2>CommunicatePars</h2>
             <p>
-              Android telefonu yansıt, iPad kontrolünü yönet veya WhatsApp Web
-              panelini aç.
+              Android telefonu yansıt, iPad kontrolünü yönet, AirPlay ile iPad
+              ekranını göster veya WhatsApp Web panelini aç.
             </p>
 
             <div className="home-grid">
               <button onClick={scanDevices}>Android Tara</button>
               <button onClick={mirrorPhone}>Android Yansıt</button>
               <button onClick={() => setPanel("ipad")}>iPad Kontrol</button>
+              <button onClick={() => setPanel("airplay")}>AirPlay</button>
               <button onClick={() => setPanel("whatsapp")}>WhatsApp Web</button>
             </div>
           </section>
@@ -281,6 +307,62 @@ function App() {
           </section>
         )}
 
+        {panel === "airplay" && (
+          <section className="ipad-panel">
+            <div className="topbar">
+              <div>
+                <h2>AirPlay Ekran Yansıtma</h2>
+                <p>
+                  iPad ekranını Pardus üzerinde gösterir. Bu bölüm mouse kontrol
+                  sürecinden tamamen ayrıdır; AirPlay açılıp kapanırken mevcut
+                  iPad mouse kontrolüne dokunulmaz.
+                </p>
+              </div>
+              <span
+                className={
+                  airplayActive ? "status-badge success" : "status-badge"
+                }
+              >
+                {airplayActive ? "AirPlay Açık" : "AirPlay Kapalı"}
+              </span>
+            </div>
+            <div className="ipad-content">
+              <article className="ipad-card">
+                <div className="step-number">1</div>
+                <div>
+                  <h3>AirPlay alıcısını aç</h3>
+                  <p>
+                    Alıcı adı iPad üzerinde CommunicatePars olarak görünür.
+                    Mouse kontrolü açıksa açık kalır.
+                  </p>
+                  <div className="control-buttons">
+                    <button
+                      className={
+                        airplayActive
+                          ? "control-toggle active"
+                          : "control-toggle"
+                      }
+                      onClick={airplayActive ? stopAirplay : startAirplay}
+                    >
+                      {airplayActive ? "AirPlay'i Kapat" : "AirPlay'i Başlat"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+              <aside className="ipad-help">
+                <h3>Bağlantı sırası</h3>
+                <ol>
+                  <li>AirPlay'i Başlat düğmesine bas.</li>
+                  <li>iPad ve Pardus'un aynı ağda olduğundan emin ol.</li>
+                  <li>iPad'de Denetim Merkezi'ni aç.</li>
+                  <li>Ekran Yansıtma düğmesine dokun.</li>
+                  <li>CommunicatePars cihazını seç.</li>
+                  <li>Mouse kontrolünü mevcut iPad Kontrol panelinden yönet.</li>
+                </ol>
+              </aside>
+            </div>
+          </section>
+        )}
         {panel === "whatsapp" && (
           <section className="whatsapp">
             <div className="topbar">

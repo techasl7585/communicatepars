@@ -45,6 +45,7 @@ function resolveX11Authority() {
 const X11_AUTHORITY = resolveX11Authority();
 
 let hidclientProcess = null;
+let airplayProcess = null;
 let activeEventNumber = null;
 let ctrlPressed = false;
 const keyboard = new GlobalKeyboardListener();
@@ -95,6 +96,108 @@ app.post("/mirror", (req, res) => {
     message: "Telefon yansıtma başlatıldı",
     pid: child.pid,
   });
+});
+
+app.post("/airplay/start", (req, res) => {
+  if (airplayProcess && airplayProcess.exitCode === null) {
+    return res.json({
+      success: true,
+      active: true,
+      message: "AirPlay alıcısı zaten çalışıyor",
+    });
+  }
+
+  exec("command -v uxplay", (lookupError, stdout) => {
+    if (lookupError || !stdout.trim()) {
+      return res.status(503).json({
+        success: false,
+        active: false,
+        message: "UxPlay bulunamadı. Önce Pardus'a uxplay paketini kur.",
+      });
+    }
+
+    const uxplayPath = stdout.trim().split("\n")[0];
+    const child = spawn(uxplayPath, ["-n", "CommunicatePars", "-nh"], {
+      env: {
+        ...process.env,
+        DISPLAY: X11_DISPLAY,
+        XAUTHORITY: X11_AUTHORITY,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    airplayProcess = child;
+    let answered = false;
+
+    const failStart = (message) => {
+      if (airplayProcess === child) airplayProcess = null;
+      if (!answered && !res.headersSent) {
+        answered = true;
+        return res.status(500).json({
+          success: false,
+          active: false,
+          message,
+        });
+      }
+    };
+
+    child.once("spawn", () => {
+      if (answered || res.headersSent) return;
+      answered = true;
+      return res.status(202).json({
+        success: true,
+        active: true,
+        message:
+          "AirPlay hazır. iPad Denetim Merkezi > Ekran Yansıtma > CommunicatePars yolunu kullan.",
+      });
+    });
+    child.stdout.on("data", (data) => {
+      const message = data.toString().trim();
+      if (message) console.log(`[uxplay] ${message}`);
+    });
+    child.stderr.on("data", (data) => {
+      const message = data.toString().trim();
+      if (message) console.error(`[uxplay hata] ${message}`);
+    });
+    child.once("error", (error) => {
+      console.error("UxPlay başlatma hatası:", error.message);
+      failStart(`AirPlay başlatılamadı: ${error.message}`);
+    });
+    child.once("close", (code) => {
+      console.log(`UxPlay kapandı. Kod: ${code}`);
+      if (airplayProcess === child) airplayProcess = null;
+    });
+  });
+});
+
+app.post("/airplay/stop", (req, res) => {
+  const child = airplayProcess;
+  airplayProcess = null;
+  if (!child || child.exitCode !== null) {
+    return res.json({
+      success: true,
+      active: false,
+      message: "AirPlay zaten kapalı",
+    });
+  }
+
+  // Yalnızca bu sunucunun başlattığı UxPlay sürecini kapatır.
+  // hidclient, activeEventNumber ve mouse geri yükleme akışına dokunmaz.
+  child.kill("SIGTERM");
+  const forceTimer = setTimeout(() => {
+    if (child.exitCode === null) child.kill("SIGKILL");
+  }, 3000);
+  forceTimer.unref();
+
+  return res.json({
+    success: true,
+    active: false,
+    message: "AirPlay kapatıldı. iPad mouse kontrolü değiştirilmedi.",
+  });
+});
+
+app.get("/airplay/status", (req, res) => {
+  const active = airplayProcess !== null && airplayProcess.exitCode === null;
+  return res.json({ success: true, active });
 });
 
 app.get("/ipad/input/list", (req, res) => {
