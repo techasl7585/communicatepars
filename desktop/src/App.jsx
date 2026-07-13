@@ -13,6 +13,7 @@ function App() {
   const [inputDevices, setInputDevices] = useState("");
   const [inputListLoading, setInputListLoading] = useState(false);
   const [iosSessionBusy, setIosSessionBusy] = useState(false);
+  const [showIosGuide, setShowIosGuide] = useState(false);
 
   const requestJson = async (url, options = {}) => {
     const response = await fetch(`${API_URL}${url}`, options);
@@ -130,8 +131,9 @@ function App() {
       setIpadControlActive(Boolean(control.active));
       if (!control.active) throw new Error("iOS mouse kontrolü aktif hale gelemedi");
       setStatus(
-        "AirPlay ve iOS kontrolü hazır. Acil mouse geri alma: Sol Ctrl + K."
+        "AirPlay ve iOS kontrolü hazır. Mouse pc'ye geri alma: Sol Ctrl + K."
       );
+      setShowIosGuide(true);
     } catch (error) {
       console.error(error);
 
@@ -150,6 +152,7 @@ function App() {
         setStatus(
           "Mouse kontrolü aktif. AirPlay güvenlik için açık bırakıldı; kapatmak için oturum düğmesini veya Sol Ctrl + K kullan."
         );
+        setShowIosGuide(true);
       } else {
         setIpadControlActive(false);
         // Kontrol kesin olarak kapalıysa, yalnızca bu denemede açılan AirPlay'i kapat.
@@ -411,6 +414,68 @@ function App() {
               </aside>
             </div>
           </section>
+        )}
+        {showIosGuide && (
+          <div role="dialog" aria-modal="true" aria-labelledby="ios-guide-title" style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", background: "rgba(15, 23, 42, 0.76)" }}>
+            <section style={{ width: "min(760px, 100%)", maxHeight: "90vh", overflowY: "auto", borderRadius: "20px", padding: "24px", background: "#ffffff", color: "#0f172a", boxShadow: "0 24px 80px rgba(0, 0, 0, 0.35)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "20px", paddingBottom: "18px", borderBottom: "1px solid #cbd5e1" }}>
+                <div>
+                  <h2 id="ios-guide-title" style={{ margin: "0 0 8px", color: "#111827", opacity: 1, visibility: "visible", textShadow: "none" }}>iOS bağlantısını tamamla</h2>
+                  <p style={{ margin: 0, color: "#334155", opacity: 1, visibility: "visible", lineHeight: 1.6 }}>Önce Bluetooth'a bağlan, sonra ekranı yansıt.</p>
+                </div>
+                <button className="small" onClick={() => setShowIosGuide(false)} style={{ flexShrink: 0 }}>Menüyü Kapat</button>
+              </div>
+
+              <article
+                className="ipad-card"
+                style={{ marginTop: "18px", color: "#ffffff" }}
+              >
+                <div className="step-number">1</div>
+                <div style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
+                  <h3 style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
+                    Bluetooth'a bağlan
+                  </h3>
+                  <ol style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
+                    <li style={{ color: "#ffffff", opacity: 1 }}>
+                      iPhone veya iPad'de <strong style={{ color: "#ffffff" }}>Ayarlar → Bluetooth</strong> menüsünü aç.
+                    </li>
+                    <li style={{ color: "#ffffff", opacity: 1 }}>
+                      <strong style={{ color: "#ffffff" }}>CommunicatePars-Mouse</strong> cihazına bağlan.
+                    </li>
+                  </ol>
+                </div>
+              </article>
+
+              <article className="ipad-card" style={{ color: "#ffffff" }}>
+                <div className="step-number">2</div>
+                <div style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
+                  <h3 style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
+                    Ekranı yansıt
+                  </h3>
+                  <ol style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
+                    <li style={{ color: "#ffffff", opacity: 1 }}>
+                      iOS Denetim Merkezi'ni aç.
+                    </li>
+                    <li style={{ color: "#ffffff", opacity: 1 }}>
+                      <strong style={{ color: "#ffffff" }}>Ekran Yansıtma</strong> düğmesine dokun.
+                    </li>
+                    <li style={{ color: "#ffffff", opacity: 1 }}>
+                      <strong style={{ color: "#ffffff" }}>CommunicatePars</strong> cihazını seç.
+                    </li>
+                  </ol>
+                </div>
+              </article>
+
+              <div role="alert" style={{ marginTop: "16px", padding: "18px", borderRadius: "14px", border: "2px solid #dc2626", background: "#fef2f2", color: "#7f1d1d" }}>
+                <h3 style={{ margin: "0 0 8px", color: "#7f1d1d", opacity: 1 }}>Mouse'u PC'ye geri almak için</h3>
+                <p style={{ margin: 0, color: "#7f1d1d", opacity: 1 }}>Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas.</p>
+              </div>
+
+              <div className="control-buttons" style={{ marginTop: "20px" }}>
+                <button className="control-toggle active" onClick={() => setShowIosGuide(false)}>Tamam</button>
+              </div>
+            </section>
+          </div>
         )}
         {panel === "whatsapp" && (
           <section className="whatsapp">
