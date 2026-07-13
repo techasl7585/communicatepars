@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./App.css";
 
 const API_URL = "http://localhost:5050";
@@ -12,6 +12,7 @@ function App() {
   const [airplayActive, setAirplayActive] = useState(false);
   const [inputDevices, setInputDevices] = useState("");
   const [inputListLoading, setInputListLoading] = useState(false);
+  const [iosSessionBusy, setIosSessionBusy] = useState(false);
 
   const requestJson = async (url, options = {}) => {
     const response = await fetch(`${API_URL}${url}`, options);
@@ -33,6 +34,23 @@ function App() {
     return data;
   };
 
+  const refreshIosSessionStatus = async () => {
+    try {
+      const [airplay, control] = await Promise.all([
+        requestJson("/airplay/status"),
+        requestJson("/ipad/control/status"),
+      ]);
+      setAirplayActive(Boolean(airplay.active));
+      setIpadControlActive(Boolean(control.active));
+    } catch (error) {
+      console.error("iOS oturum durumu alınamadı:", error);
+    }
+  };
+  useEffect(() => {
+    refreshIosSessionStatus();
+    const timer = window.setInterval(refreshIosSessionStatus, 1500);
+    return () => window.clearInterval(timer);
+  }, []);
   const scanDevices = async () => {
     try {
       setStatus("Android telefonlar taranıyor...");
@@ -84,6 +102,110 @@ function App() {
     } catch (error) {
       console.error(error);
       setStatus(error.message || "AirPlay kapatılamadı");
+    }
+  };
+  const startIosSession = async () => {
+    if (iosSessionBusy) return;
+    setIosSessionBusy(true);
+    let airplayStartedByThisAttempt = false;
+    try {
+      // Güvenlik sırası: önce görüntü, ancak başarıdan sonra mouse aktarımı.
+      setStatus("1/2 AirPlay başlatılıyor...");
+      if (!airplayActive) {
+        const airplay = await requestJson("/airplay/start", { method: "POST" });
+        if (!airplay.active) throw new Error("AirPlay aktif hale gelemedi");
+        setAirplayActive(true);
+        airplayStartedByThisAttempt = true;
+      }
+
+      // UxPlay penceresinin Pardus'ta öne gelmesi için kısa süre tanı.
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+
+      setStatus("2/2 iOS mouse kontrolü başlatılıyor...");
+      const control = await requestJson("/ipad/control/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventNumber: inputEvent }),
+      });
+      setIpadControlActive(Boolean(control.active));
+      if (!control.active) throw new Error("iOS mouse kontrolü aktif hale gelemedi");
+      setStatus(
+        "AirPlay ve iOS kontrolü hazır. Acil mouse geri alma: Sol Ctrl + K."
+      );
+    } catch (error) {
+      console.error(error);
+
+      // Ağ/yanıt hatasında kontrol gerçekte başlamış olabilir. Önce sunucudan
+      // doğrula; mouse iOS'a geçmişse AirPlay'i asla kapatma.
+      let controlReallyActive = false;
+      try {
+        const controlStatus = await requestJson("/ipad/control/status");
+        controlReallyActive = Boolean(controlStatus.active);
+        setIpadControlActive(controlReallyActive);
+      } catch (statusError) {
+        console.error("Kontrol durumu doğrulanamadı:", statusError);
+      }
+
+      if (controlReallyActive) {
+        setStatus(
+          "Mouse kontrolü aktif. AirPlay güvenlik için açık bırakıldı; kapatmak için oturum düğmesini veya Sol Ctrl + K kullan."
+        );
+      } else {
+        setIpadControlActive(false);
+        // Kontrol kesin olarak kapalıysa, yalnızca bu denemede açılan AirPlay'i kapat.
+        if (airplayStartedByThisAttempt) {
+          try {
+            await requestJson("/airplay/stop", { method: "POST" });
+            setAirplayActive(false);
+          } catch (airplayError) {
+            console.error("AirPlay geri alma hatası:", airplayError);
+          }
+        }
+        setStatus(error.message || "iOS oturumu başlatılamadı");
+      }
+    } finally {
+      setIosSessionBusy(false);
+      refreshIosSessionStatus();
+    }
+  };
+  const stopIosSession = async () => {
+    if (iosSessionBusy) return;
+    setIosSessionBusy(true);
+    try {
+      // Kritik güvenlik sırası: önce mouse Pardus'a geri verilir.
+      // Bu aşama hata verirse aşağıdaki AirPlay kapatma koduna geçilmez.
+      setStatus("1/2 Mouse Pardus'a geri veriliyor...");
+      const control = await requestJson("/ipad/control/stop", {
+        method: "POST",
+      });
+      setIpadControlActive(false);
+
+      // Mouse geri dönüşü başarıyla yanıtlandıktan sonra AirPlay kapatılır.
+      setStatus("2/2 Mouse geri alındı; AirPlay kapatılıyor...");
+      try {
+        if (airplayActive) {
+          await requestJson("/airplay/stop", { method: "POST" });
+        }
+        setAirplayActive(false);
+        setStatus(
+          control.message ||
+            "iOS oturumu kapatıldı; mouse Pardus'a geri verildi."
+        );
+      } catch (airplayError) {
+        console.error(airplayError);
+        setStatus(
+          `Mouse Pardus'a geri verildi; ancak AirPlay kapatılamadı: ${airplayError.message}`
+        );
+      }
+    } catch (mouseRestoreError) {
+      console.error(mouseRestoreError);
+      // Mouse geri yükleme başarısızsa AirPlay'e hiçbir kapatma isteği gönderilmez.
+      setStatus(
+        `${mouseRestoreError.message || "Mouse geri yüklenemedi"}. AirPlay güvenlik için açık bırakıldı; Sol Ctrl + K kullan.`
+      );
+    } finally {
+      setIosSessionBusy(false);
+      refreshIosSessionStatus();
     }
   };
   const listInputDevices = async () => {
@@ -172,8 +294,8 @@ function App() {
           <section className="home">
             <h2>CommunicatePars</h2>
             <p>
-              Android telefonu yansıt, iOS ekranını AirPlay ile göster ve mouse
-              kontrolünü aynı sayfadan yönet veya WhatsApp Web panelini aç.
+              Android telefonu yansıt veya AirPlay ve iOS mouse kontrolünü
+              güvenli tek tuşla birlikte yönet.
             </p>
 
             <div className="home-grid">
@@ -191,23 +313,16 @@ function App() {
               <div>
                 <h2>iOS AirPlay ve Mouse Kontrolü</h2>
                 <p>
-                  Önce AirPlay ile ekranı yansıt, ardından mevcut ve güvenli
-                  mouse kontrol akışını başlat.
+                  Tek tuş önce AirPlay'i açar, ardından mouse kontrolünü iOS'a
+                  aktarır. Kapatırken sıra tersine döner: önce mouse Pardus'a
+                  geri verilir, yalnızca başarılı olursa AirPlay kapatılır.
                 </p>
               </div>
               <div className="control-buttons">
-                <span
-                  className={
-                    airplayActive ? "status-badge success" : "status-badge"
-                  }
-                >
+                <span className={airplayActive ? "status-badge success" : "status-badge"}>
                   {airplayActive ? "AirPlay Açık" : "AirPlay Kapalı"}
                 </span>
-                <span
-                  className={
-                    ipadControlActive ? "status-badge success" : "status-badge"
-                  }
-                >
+                <span className={ipadControlActive ? "status-badge success" : "status-badge"}>
                   {ipadControlActive ? "Kontrol Açık" : "Kontrol Kapalı"}
                 </span>
               </div>
@@ -216,54 +331,24 @@ function App() {
             <div className="ipad-content">
               <article className="ipad-card">
                 <div className="step-number">1</div>
-                <div>
-                  <h3>AirPlay ekran yansıtmayı başlat</h3>
-                  <p>
-                    Önce AirPlay alıcısını aç. iPad ve Pardus aynı ağdayken
-                    iPad Denetim Merkezi → Ekran Yansıtma → CommunicatePars
-                    yolunu kullan. Bu düğme mouse kontrolünü değiştirmez.
-                  </p>
-                  <div className="control-buttons">
-                    <button
-                      className={
-                        airplayActive
-                          ? "control-toggle active"
-                          : "control-toggle"
-                      }
-                      onClick={airplayActive ? stopAirplay : startAirplay}
-                    >
-                      {airplayActive ? "AirPlay'i Kapat" : "AirPlay'i Başlat"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article className="ipad-card">
-                <div className="step-number">2</div>
                 <div className="form-area">
-                  <h3>Mouse aygıtını seç</h3>
+                  <h3>Mouse aygıtını bir kez seç</h3>
                   <p>
-                    Listede mouse modelini bul. Örneğin Logitech G305 satırının
-                    başında 8 yazıyorsa event alanına 8 gir. Power Button,
-                    Video Bus ve HDMI satırlarını seçme.
+                    Mouse modelinin event numarasını seç. Kontrol etkinken bu
+                    alan kilitlenir; yanlış event değişikliği yapılamaz.
                   </p>
                   <button
                     className="input-list-button"
                     onClick={listInputDevices}
-                    disabled={inputListLoading || ipadControlActive}
+                    disabled={inputListLoading || ipadControlActive || iosSessionBusy}
                   >
-                    {inputListLoading
-                      ? "Aygıtlar Taranıyor..."
-                      : "Mouse Indexini Göster"}
+                    {inputListLoading ? "Aygıtlar Taranıyor..." : "Mouse Indexini Göster"}
                   </button>
                   {inputDevices && (
                     <div className="input-device-panel">
                       <div className="input-device-title">
                         Kullanılabilir input aygıtları
-                        <small>
-                          Mouse adını bul ve satırın başındaki event numarasını
-                          kullan.
-                        </small>
+                        <small>Mouse satırının başındaki event numarasını kullan.</small>
                       </div>
                       <pre>{inputDevices}</pre>
                     </div>
@@ -275,7 +360,7 @@ function App() {
                       min="0"
                       max="99"
                       value={inputEvent}
-                      disabled={ipadControlActive}
+                      disabled={ipadControlActive || iosSessionBusy}
                       onChange={(event) => setInputEvent(event.target.value)}
                     />
                   </div>
@@ -283,57 +368,45 @@ function App() {
               </article>
 
               <article className="ipad-card">
-                <div className="step-number">3</div>
+                <div className="step-number">2</div>
                 <div>
-                  <h3>iOS mouse kontrolünü yönet</h3>
+                  <h3>AirPlay + iOS kontrolünü tek tuşla yönet</h3>
                   <p>
-                    Kontrolü başlat ve Pardus yetki penceresini onayla. Sonra
-                    iPad Bluetooth ayarlarında CommunicatePars-Mouse cihazına
-                    yeniden bağlan. Kontrol kapatıldığında mevcut sunucu akışı
-                    mouse'u otomatik olarak Pardus'a geri verir.
+                    Başlatma sırasında AirPlay penceresi önce açılır. Böylece
+                    mouse iOS'a geçtiğinde yansıtma arka menüde kalmaz. Durdurma
+                    sırasında mouse geri yüklenmeden AirPlay kapatılmaz.
                   </p>
                   <div className="control-buttons">
                     <button
-                      className={
-                        ipadControlActive
-                          ? "control-toggle active"
-                          : "control-toggle"
-                      }
-                      onClick={
-                        ipadControlActive
-                          ? stopIpadControl
-                          : startIpadControl
-                      }
+                      className={ipadControlActive ? "control-toggle active" : "control-toggle"}
+                      onClick={ipadControlActive ? stopIosSession : startIosSession}
+                      disabled={iosSessionBusy}
                     >
-                      {ipadControlActive
-                        ? "Kontrolü Kapat ve Mouse'u Pardus'a Geri Al"
-                        : "iOS Kontrolünü Başlat"}
+                      {iosSessionBusy
+                        ? "İşlem sürüyor..."
+                        : ipadControlActive
+                          ? "Oturumu Kapat ve Mouse'u Pardus'a Geri Al"
+                          : "AirPlay + iOS Kontrolünü Başlat"}
                     </button>
                   </div>
                 </div>
               </article>
 
               <aside className="ipad-help">
-                <h3>Güvenli kullanım sırası</h3>
+                <h3>Korunan güvenlik akışı</h3>
                 <ol>
-                  <li>iPad'de AssistiveTouch özelliğini aç.</li>
-                  <li>AirPlay'i başlat ve CommunicatePars'a bağlan.</li>
-                  <li>Mouse event numarasını kontrol et.</li>
-                  <li>iOS Kontrolünü Başlat düğmesine bas.</li>
-                  <li>Pardus yetki penceresini onayla.</li>
-                  <li>
-                    iPad Bluetooth ayarlarında CommunicatePars-Mouse cihazına
-                    yeniden bağlan.
-                  </li>
-                  <li>Bitirince kontrol düğmesine tekrar bas.</li>
-                  <li>
-                    Acil durumda Sol Ctrl + K kullan; bu yol mouse'u Pardus'a
-                    geri veren mevcut mekanizmayı çalıştırır.
-                  </li>
+                  <li>AirPlay başlatılır ve UxPlay penceresine süre verilir.</li>
+                  <li>Yalnızca AirPlay başarılıysa mouse kontrolü başlatılır.</li>
+                  <li>iPad'de CommunicatePars ekran yansıtmayı seç.</li>
+                  <li>CommunicatePars-Mouse Bluetooth cihazına bağlan.</li>
+                  <li>Kapatırken önce mevcut mouse geri yükleme endpointi çalışır.</li>
+                  <li>Mouse başarıyla dönerse AirPlay kapatılır.</li>
+                  <li>Acil durumda her zaman Sol Ctrl + K kullan.</li>
                 </ol>
                 <p>
-                  AirPlay'i kapatmak mouse kontrolünü kapatmaz. Mouse kontrolü
-                  yalnızca kendi düğmesiyle veya Sol Ctrl + K ile sonlandırılır.
+                  Sol Ctrl + K sonrası ekran durumu en geç 1,5 saniye içinde
+                  sunucudan tekrar okunur. Backend mouse geri verme kodu
+                  değiştirilmemiştir.
                 </p>
               </aside>
             </div>
