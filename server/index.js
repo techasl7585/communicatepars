@@ -223,6 +223,71 @@ function stopBluetoothPairingMode() {
   }
 }
 
+
+
+
+
+
+
+function disconnectBluetoothDevice(callback = () => {}) {
+  exec(
+    "bluetoothctl devices Connected",
+    (error, stdout) => {
+      if (error) {
+        callback(error);
+        return;
+      }
+
+      const devices = stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (devices.length === 0) {
+        callback(null, "Bağlı bluetooth cihazı yok");
+        return;
+      }
+
+      let pending = devices.length;
+
+      devices.forEach((line) => {
+        const match = line.match(
+          /Device\s+([0-9A-F]{2}(?::[0-9A-F]{2}){5})/i
+        );
+
+        if (!match) {
+          pending--;
+
+          if (pending === 0) {
+            callback(null, "Bluetooth bağlantıları temizlendi");
+          }
+
+          return;
+        }
+
+        const mac = match[1];
+
+        exec(`bluetoothctl disconnect ${mac}`, () => {
+          console.log(`Bluetooth bağlantısı kesildi: ${mac}`);
+
+          pending--;
+
+          if (pending === 0) {
+            callback(null, "Bluetooth bağlantıları temizlendi");
+          }
+        });
+      });
+    }
+  );
+}
+
+
+
+
+
+
+
+
 app.post("/bluetooth/pairing/start", (req, res) => {
   if (bluetoothAgentProcess && bluetoothAgentProcess.exitCode === null) {
     return res.json({ success: true, active: true, message: "Yeni iOS eşleştirme modu zaten açık" });
@@ -485,12 +550,30 @@ fi
 
 function stopIpadControlFromShortcut() {
   console.log("CTRL + K ile iPad kontrolü kapatılıyor");
+
   const eventNumber = activeEventNumber;
   activeEventNumber = null;
+
   stopHidclient();
+
   restoreMouse(eventNumber, (error, output) => {
-    if (error) console.error("Mouse geri yükleme hatası:", error.message);
-    else console.log(output);
+    if (error) {
+      console.error("Mouse geri yükleme hatası:", error.message);
+      return;
+    }
+
+    console.log(output);
+
+    disconnectBluetoothDevice((disconnectError) => {
+      if (disconnectError) {
+        console.error(
+          "Bluetooth bağlantısı kesilemedi:",
+          disconnectError.message
+        );
+      } else {
+        console.log("Bluetooth bağlantısı sonlandırıldı.");
+      }
+    });
   });
 }
 
@@ -499,6 +582,7 @@ app.post("/ipad/control/stop", (req, res) => {
 
   const eventNumber = activeEventNumber;
   activeEventNumber = null;
+
   stopHidclient();
 
   restoreMouse(eventNumber, (error, output) => {
@@ -511,10 +595,21 @@ app.post("/ipad/control/stop", (req, res) => {
       });
     }
 
-    return res.json({
-      success: true,
-      active: false,
-      message: output || "iPad kontrolü kapatıldı; mouse Pardus'a geri verildi.",
+    disconnectBluetoothDevice((disconnectError) => {
+      if (disconnectError) {
+        console.error(
+          "Bluetooth bağlantısı kesilemedi:",
+          disconnectError.message
+        );
+      }
+
+      return res.json({
+        success: true,
+        active: false,
+        message:
+          (output || "Mouse Pardus'a geri verildi.") +
+          " Bluetooth bağlantısı sonlandırıldı.",
+      });
     });
   });
 });
