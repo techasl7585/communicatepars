@@ -153,8 +153,7 @@ function App() {
         <button onClick={() => setPanel("home")}>Ana Ekran</button>
         <button onClick={scanDevices}>Telefonu Tara</button>
         <button onClick={mirrorPhone}>Telefonu Yansıt</button>
-        <button onClick={() => setPanel("ipad")}>iPad Kontrol</button>
-        <button onClick={() => setPanel("airplay")}>AirPlay</button>
+        <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
         <div className="box">
@@ -173,167 +172,56 @@ function App() {
           <section className="home">
             <h2>CommunicatePars</h2>
             <p>
-              Android telefonu yansıt, iPad kontrolünü yönet, AirPlay ile iPad
-              ekranını göster veya WhatsApp Web panelini aç.
+              Android telefonu yansıt, iOS ekranını AirPlay ile göster ve mouse
+              kontrolünü aynı sayfadan yönet veya WhatsApp Web panelini aç.
             </p>
 
             <div className="home-grid">
               <button onClick={scanDevices}>Android Tara</button>
               <button onClick={mirrorPhone}>Android Yansıt</button>
-              <button onClick={() => setPanel("ipad")}>iPad Kontrol</button>
-              <button onClick={() => setPanel("airplay")}>AirPlay</button>
+              <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
               <button onClick={() => setPanel("whatsapp")}>WhatsApp Web</button>
             </div>
           </section>
         )}
 
-        {panel === "ipad" && (
+        {panel === "ios" && (
           <section className="ipad-panel">
             <div className="topbar">
               <div>
-                <h2>iPad Kontrol</h2>
+                <h2>iOS AirPlay ve Mouse Kontrolü</h2>
                 <p>
-                  Kontrolü başlat, ardından iPad'den CommunicatePars-Mouse
-                  cihazına yeniden bağlan.
+                  Önce AirPlay ile ekranı yansıt, ardından mevcut ve güvenli
+                  mouse kontrol akışını başlat.
                 </p>
               </div>
-
-              <span
-                className={
-                  ipadControlActive ? "status-badge success" : "status-badge"
-                }
-              >
-                {ipadControlActive ? "Kontrol Açık" : "Kontrol Kapalı"}
-              </span>
+              <div className="control-buttons">
+                <span
+                  className={
+                    airplayActive ? "status-badge success" : "status-badge"
+                  }
+                >
+                  {airplayActive ? "AirPlay Açık" : "AirPlay Kapalı"}
+                </span>
+                <span
+                  className={
+                    ipadControlActive ? "status-badge success" : "status-badge"
+                  }
+                >
+                  {ipadControlActive ? "Kontrol Açık" : "Kontrol Kapalı"}
+                </span>
+              </div>
             </div>
 
             <div className="ipad-content">
               <article className="ipad-card">
                 <div className="step-number">1</div>
-                <div className="form-area">
-                  <h3>Mouse aygıtı</h3>
-                  <p>
-                    Listede mouse modelini bul. Örneğin Logitech G305 satırının
-                    başında 8 yazıyorsa aşağıdaki event alanına 8 gir. Power
-                    Button, Video Bus ve HDMI satırlarını seçme.
-                  </p>
-
-                  <button
-                    className="input-list-button"
-                    onClick={listInputDevices}
-                    disabled={inputListLoading}
-                  >
-                    {inputListLoading
-                      ? "Aygıtlar Taranıyor..."
-                      : "Mouse Indexini Göster"}
-                  </button>
-
-                  {inputDevices && (
-                    <div className="input-device-panel">
-                      <div className="input-device-title">
-                        Kullanılabilir input aygıtları
-                        <small>
-                          Mouse adını bul ve satırın başındaki event numarasını
-                          kullan.
-                        </small>
-                      </div>
-                      <pre>{inputDevices}</pre>
-                    </div>
-                  )}
-
-                  <div className="event-input">
-                    <span>event</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="99"
-                      value={inputEvent}
-                      onChange={(event) => setInputEvent(event.target.value)}
-                    />
-                  </div>
-                </div>
-              </article>
-
-              <article className="ipad-card">
-                <div className="step-number">2</div>
                 <div>
-                  <h3>Kontrol sistemi</h3>
+                  <h3>AirPlay ekran yansıtmayı başlat</h3>
                   <p>
-                    Kontrolü başlat ve Pardus yetki penceresini onayla. Sonra
-                    iPad Bluetooth ayarlarında CommunicatePars-Mouse cihazının
-                    bağlantısını kesip yeniden bağlan. Kontrolü kapatınca mouse
-                    otomatik olarak Pardus'a geri verilir.
-                  </p>
-
-                  <div className="control-buttons">
-                    <button
-                      className={
-                        ipadControlActive
-                          ? "control-toggle active"
-                          : "control-toggle"
-                      }
-                      onClick={
-                        ipadControlActive
-                          ? stopIpadControl
-                          : startIpadControl
-                      }
-                    >
-                      {ipadControlActive
-                        ? "Kontrolü Kapat ve Mouse'u Geri Al"
-                        : "Kontrolü Başlat"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <aside className="ipad-help">
-                <h3>Kullanım sırası</h3>
-                <ol>
-                  <li>iPad'de AssistiveTouch özelliğini aç.</li>
-                  <li>Mouse event numarasını kontrol et.</li>
-                  <li>Kontrolü Başlat düğmesine bas.</li>
-                  <li>Pardus yetki penceresini onayla.</li>
-                  <li>
-                    iPad Bluetooth ayarlarında CommunicatePars-Mouse cihazına
-                    yeniden bağlan.
-                  </li>
-                  <li>Mouse ile iPad'i kontrol et.</li>
-                  <li>
-                    Bitirince düğmeye tekrar bas veya Sol Ctrl + K kullan.
-                  </li>
-                </ol>
-              </aside>
-            </div>
-          </section>
-        )}
-
-        {panel === "airplay" && (
-          <section className="ipad-panel">
-            <div className="topbar">
-              <div>
-                <h2>AirPlay Ekran Yansıtma</h2>
-                <p>
-                  iPad ekranını Pardus üzerinde gösterir. Bu bölüm mouse kontrol
-                  sürecinden tamamen ayrıdır; AirPlay açılıp kapanırken mevcut
-                  iPad mouse kontrolüne dokunulmaz.
-                </p>
-              </div>
-              <span
-                className={
-                  airplayActive ? "status-badge success" : "status-badge"
-                }
-              >
-                {airplayActive ? "AirPlay Açık" : "AirPlay Kapalı"}
-              </span>
-            </div>
-            <div className="ipad-content">
-              <article className="ipad-card">
-                <div className="step-number">1</div>
-                <div>
-                  <h3>AirPlay alıcısını aç</h3>
-                  <p>
-                    Alıcı adı iPad üzerinde CommunicatePars olarak görünür.
-                    Mouse kontrolü açıksa açık kalır.
+                    Önce AirPlay alıcısını aç. iPad ve Pardus aynı ağdayken
+                    iPad Denetim Merkezi → Ekran Yansıtma → CommunicatePars
+                    yolunu kullan. Bu düğme mouse kontrolünü değiştirmez.
                   </p>
                   <div className="control-buttons">
                     <button
@@ -349,16 +237,104 @@ function App() {
                   </div>
                 </div>
               </article>
+
+              <article className="ipad-card">
+                <div className="step-number">2</div>
+                <div className="form-area">
+                  <h3>Mouse aygıtını seç</h3>
+                  <p>
+                    Listede mouse modelini bul. Örneğin Logitech G305 satırının
+                    başında 8 yazıyorsa event alanına 8 gir. Power Button,
+                    Video Bus ve HDMI satırlarını seçme.
+                  </p>
+                  <button
+                    className="input-list-button"
+                    onClick={listInputDevices}
+                    disabled={inputListLoading || ipadControlActive}
+                  >
+                    {inputListLoading
+                      ? "Aygıtlar Taranıyor..."
+                      : "Mouse Indexini Göster"}
+                  </button>
+                  {inputDevices && (
+                    <div className="input-device-panel">
+                      <div className="input-device-title">
+                        Kullanılabilir input aygıtları
+                        <small>
+                          Mouse adını bul ve satırın başındaki event numarasını
+                          kullan.
+                        </small>
+                      </div>
+                      <pre>{inputDevices}</pre>
+                    </div>
+                  )}
+                  <div className="event-input">
+                    <span>event</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="99"
+                      value={inputEvent}
+                      disabled={ipadControlActive}
+                      onChange={(event) => setInputEvent(event.target.value)}
+                    />
+                  </div>
+                </div>
+              </article>
+
+              <article className="ipad-card">
+                <div className="step-number">3</div>
+                <div>
+                  <h3>iOS mouse kontrolünü yönet</h3>
+                  <p>
+                    Kontrolü başlat ve Pardus yetki penceresini onayla. Sonra
+                    iPad Bluetooth ayarlarında CommunicatePars-Mouse cihazına
+                    yeniden bağlan. Kontrol kapatıldığında mevcut sunucu akışı
+                    mouse'u otomatik olarak Pardus'a geri verir.
+                  </p>
+                  <div className="control-buttons">
+                    <button
+                      className={
+                        ipadControlActive
+                          ? "control-toggle active"
+                          : "control-toggle"
+                      }
+                      onClick={
+                        ipadControlActive
+                          ? stopIpadControl
+                          : startIpadControl
+                      }
+                    >
+                      {ipadControlActive
+                        ? "Kontrolü Kapat ve Mouse'u Pardus'a Geri Al"
+                        : "iOS Kontrolünü Başlat"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+
               <aside className="ipad-help">
-                <h3>Bağlantı sırası</h3>
+                <h3>Güvenli kullanım sırası</h3>
                 <ol>
-                  <li>AirPlay'i Başlat düğmesine bas.</li>
-                  <li>iPad ve Pardus'un aynı ağda olduğundan emin ol.</li>
-                  <li>iPad'de Denetim Merkezi'ni aç.</li>
-                  <li>Ekran Yansıtma düğmesine dokun.</li>
-                  <li>CommunicatePars cihazını seç.</li>
-                  <li>Mouse kontrolünü mevcut iPad Kontrol panelinden yönet.</li>
+                  <li>iPad'de AssistiveTouch özelliğini aç.</li>
+                  <li>AirPlay'i başlat ve CommunicatePars'a bağlan.</li>
+                  <li>Mouse event numarasını kontrol et.</li>
+                  <li>iOS Kontrolünü Başlat düğmesine bas.</li>
+                  <li>Pardus yetki penceresini onayla.</li>
+                  <li>
+                    iPad Bluetooth ayarlarında CommunicatePars-Mouse cihazına
+                    yeniden bağlan.
+                  </li>
+                  <li>Bitirince kontrol düğmesine tekrar bas.</li>
+                  <li>
+                    Acil durumda Sol Ctrl + K kullan; bu yol mouse'u Pardus'a
+                    geri veren mevcut mekanizmayı çalıştırır.
+                  </li>
                 </ol>
+                <p>
+                  AirPlay'i kapatmak mouse kontrolünü kapatmaz. Mouse kontrolü
+                  yalnızca kendi düğmesiyle veya Sol Ctrl + K ile sonlandırılır.
+                </p>
               </aside>
             </div>
           </section>
