@@ -117,7 +117,7 @@ app.post("/airplay/start", (req, res) => {
     }
 
     const uxplayPath = stdout.trim().split("\n")[0];
-    const child = spawn(uxplayPath, ["-n", "CommunicatePars", "-nh"], {
+    const child = spawn(uxplayPath, ["-n", "MOUSE pc'ye GERİ ALMA: Sol Ctrl + K.", "-nh"], {
       env: {
         ...process.env,
         DISPLAY: X11_DISPLAY,

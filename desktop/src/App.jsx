@@ -278,7 +278,7 @@ function App() {
         <button onClick={() => setPanel("home")}>Ana Ekran</button>
         <button onClick={scanDevices}>Telefonu Tara</button>
         <button onClick={mirrorPhone}>Telefonu Yansıt</button>
-        <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
+        <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
         <div className="box">
@@ -304,7 +304,7 @@ function App() {
             <div className="home-grid">
               <button onClick={scanDevices}>Android Tara</button>
               <button onClick={mirrorPhone}>Android Yansıt</button>
-              <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
+              <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
               <button onClick={() => setPanel("whatsapp")}>WhatsApp Web</button>
             </div>
           </section>
@@ -373,7 +373,7 @@ function App() {
               <article className="ipad-card">
                 <div className="step-number">2</div>
                 <div>
-                  <h3>AirPlay + iOS kontrolünü tek tuşla yönet</h3>
+                  <h3>iOS kontrolünü tek tuşla yönet</h3>
                   <p>
                     Başlatma sırasında AirPlay penceresi önce açılır. Böylece
                     mouse iOS'a geçtiğinde yansıtma arka menüde kalmaz. Durdurma
@@ -389,7 +389,7 @@ function App() {
                         ? "İşlem sürüyor..."
                         : ipadControlActive
                           ? "Oturumu Kapat ve Mouse'u Pardus'a Geri Al"
-                          : "AirPlay + iOS Kontrolünü Başlat"}
+                          : "iOS Kontrolünü Başlat"}
                     </button>
                   </div>
                 </div>
@@ -401,7 +401,7 @@ function App() {
                   <li>AirPlay başlatılır ve UxPlay penceresine süre verilir.</li>
                   <li>Yalnızca AirPlay başarılıysa mouse kontrolü başlatılır.</li>
                   <li>iPad'de CommunicatePars ekran yansıtmayı seç.</li>
-                  <li>CommunicatePars-Mouse Bluetooth cihazına bağlan.</li>
+                  <li>Pardus Bilgisayarı Bluetoothla Eşlestir.</li>
                   <li>Kapatırken önce mevcut mouse geri yükleme endpointi çalışır.</li>
                   <li>Mouse başarıyla dönerse AirPlay kapatılır.</li>
                   <li>Acil durumda her zaman Sol Ctrl + K kullan.</li>
@@ -440,7 +440,7 @@ function App() {
                       iPhone veya iPad'de <strong style={{ color: "#ffffff" }}>Ayarlar → Bluetooth</strong> menüsünü aç.
                     </li>
                     <li style={{ color: "#ffffff", opacity: 1 }}>
-                      <strong style={{ color: "#ffffff" }}>CommunicatePars-Mouse</strong> cihazına bağlan.
+                      <strong style={{ color: "#ffffff" }}>CommunicatePars</strong> cihazına bağlan.
                     </li>
                   </ol>
                 </div>
