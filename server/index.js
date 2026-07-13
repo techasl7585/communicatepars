@@ -46,6 +46,8 @@ const X11_AUTHORITY = resolveX11Authority();
 
 let hidclientProcess = null;
 let airplayProcess = null;
+let bluetoothAgentProcess = null;
+let bluetoothPairingTimer = null;
 let activeEventNumber = null;
 let ctrlPressed = false;
 const keyboard = new GlobalKeyboardListener();
@@ -117,7 +119,7 @@ app.post("/airplay/start", (req, res) => {
     }
 
     const uxplayPath = stdout.trim().split("\n")[0];
-    const child = spawn(uxplayPath, ["-n", "MOUSE pc'ye GERİ ALMA: Sol Ctrl + K.", "-nh"], {
+    const child = spawn(uxplayPath, ["-n", "CommunicatePars", "-nh"], {
       env: {
         ...process.env,
         DISPLAY: X11_DISPLAY,
@@ -197,6 +199,102 @@ app.post("/airplay/stop", (req, res) => {
 
 app.get("/airplay/status", (req, res) => {
   const active = airplayProcess !== null && airplayProcess.exitCode === null;
+  return res.json({ success: true, active });
+});
+
+function stopBluetoothPairingMode() {
+  if (bluetoothPairingTimer) {
+    clearTimeout(bluetoothPairingTimer);
+    bluetoothPairingTimer = null;
+  }
+  const agent = bluetoothAgentProcess;
+  bluetoothAgentProcess = null;
+  if (!agent || agent.exitCode !== null) return;
+  try {
+    // Yalnızca yeni cihaz eşleştirme görünürlüğünü kapatır.
+    // hidclient ve mouse geri yükleme akışına dokunmaz.
+    agent.stdin.write("discoverable off\n");
+    agent.stdin.write("pairable off\n");
+    agent.stdin.write("quit\n");
+    agent.stdin.end();
+  } catch (error) {
+    console.error("Bluetooth eşleştirme modu kapatma hatası:", error.message);
+    try { agent.kill("SIGTERM"); } catch (_) {}
+  }
+}
+
+app.post("/bluetooth/pairing/start", (req, res) => {
+  if (bluetoothAgentProcess && bluetoothAgentProcess.exitCode === null) {
+    return res.json({ success: true, active: true, message: "Yeni iOS eşleştirme modu zaten açık" });
+  }
+  exec("command -v bluetoothctl", (lookupError, stdout) => {
+    if (lookupError || !stdout.trim()) {
+      return res.status(503).json({ success: false, active: false, message: "bluetoothctl bulunamadı. Pardus'ta BlueZ paketini kur." });
+    }
+    const bluetoothctlPath = stdout.trim().split("\n")[0];
+    const child = spawn(bluetoothctlPath, ["--agent", "NoInputNoOutput"], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    bluetoothAgentProcess = child;
+    let answered = false;
+    let output = "";
+    const fail = (message) => {
+      if (bluetoothAgentProcess === child) bluetoothAgentProcess = null;
+      if (!answered && !res.headersSent) {
+        answered = true;
+        return res.status(500).json({ success: false, active: false, message });
+      }
+    };
+    child.stdout.on("data", (data) => {
+      const text = data.toString();
+      output += text;
+      if (text.trim()) console.log(`[bluetoothctl] ${text.trim()}`);
+    });
+    child.stderr.on("data", (data) => {
+      const text = data.toString().trim();
+      if (text) console.error(`[bluetoothctl hata] ${text}`);
+    });
+    child.once("error", (error) => fail(`Bluetooth eşleştirme modu açılamadı: ${error.message}`));
+    child.once("close", (code) => {
+      console.log(`Bluetooth eşleştirme agent kapandı. Kod: ${code}`);
+      if (bluetoothAgentProcess === child) bluetoothAgentProcess = null;
+    });
+    child.once("spawn", () => {
+      try {
+        child.stdin.write("power on\n");
+        child.stdin.write("agent NoInputNoOutput\n");
+        child.stdin.write("default-agent\n");
+        child.stdin.write("pairable on\n");
+        child.stdin.write("discoverable-timeout 180\n");
+        child.stdin.write("discoverable on\n");
+      } catch (error) {
+        fail(`Bluetooth komutları gönderilemedi: ${error.message}`);
+        return;
+      }
+      setTimeout(() => {
+        if (answered || res.headersSent) return;
+        if (child.exitCode !== null) return fail("Bluetooth eşleştirme agent kapandı");
+        answered = true;
+        return res.json({
+          success: true,
+          active: true,
+          message: "Yeni iOS eşleştirmesi açık. Bluetooth menüsünden CommunicatePars-Mouse cihazına bağlan.",
+          output: output.trim(),
+        });
+      }, 900);
+      bluetoothPairingTimer = setTimeout(stopBluetoothPairingMode, 180000);
+      bluetoothPairingTimer.unref();
+    });
+  });
+});
+
+app.post("/bluetooth/pairing/stop", (req, res) => {
+  stopBluetoothPairingMode();
+  return res.json({ success: true, active: false, message: "Yeni iOS eşleştirme modu kapatıldı" });
+});
+
+app.get("/bluetooth/pairing/status", (req, res) => {
+  const active = bluetoothAgentProcess !== null && bluetoothAgentProcess.exitCode === null;
   return res.json({ success: true, active });
 });
 

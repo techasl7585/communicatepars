@@ -13,7 +13,7 @@ function App() {
   const [inputDevices, setInputDevices] = useState("");
   const [inputListLoading, setInputListLoading] = useState(false);
   const [iosSessionBusy, setIosSessionBusy] = useState(false);
-  const [showIosGuide, setShowIosGuide] = useState(false);
+  const [bluetoothPairingActive, setBluetoothPairingActive] = useState(false);
 
   const requestJson = async (url, options = {}) => {
     const response = await fetch(`${API_URL}${url}`, options);
@@ -37,12 +37,14 @@ function App() {
 
   const refreshIosSessionStatus = async () => {
     try {
-      const [airplay, control] = await Promise.all([
+      const [airplay, control, pairing] = await Promise.all([
         requestJson("/airplay/status"),
         requestJson("/ipad/control/status"),
+        requestJson("/bluetooth/pairing/status"),
       ]);
       setAirplayActive(Boolean(airplay.active));
       setIpadControlActive(Boolean(control.active));
+      setBluetoothPairingActive(Boolean(pairing.active));
     } catch (error) {
       console.error("iOS oturum durumu alınamadı:", error);
     }
@@ -110,7 +112,13 @@ function App() {
     setIosSessionBusy(true);
     let airplayStartedByThisAttempt = false;
     try {
-      // Güvenlik sırası: önce görüntü, ancak başarıdan sonra mouse aktarımı.
+      // Önce yeni/eşleşmemiş iOS cihazlar için eşleştirme modunu aç.
+      // Mouse geri yükleme mekanizmasına dokunulmaz.
+      setStatus("Bluetooth yeni cihaz eşleştirme modu açılıyor...");
+      const pairing = await requestJson("/bluetooth/pairing/start", { method: "POST" });
+      setBluetoothPairingActive(Boolean(pairing.active));
+
+      // Mevcut sıra korunur: önce AirPlay, sonra mouse aktarımı.
       setStatus("1/2 AirPlay başlatılıyor...");
       if (!airplayActive) {
         const airplay = await requestJson("/airplay/start", { method: "POST" });
@@ -133,7 +141,6 @@ function App() {
       setStatus(
         "AirPlay ve iOS kontrolü hazır. Mouse pc'ye geri alma: Sol Ctrl + K."
       );
-      setShowIosGuide(true);
     } catch (error) {
       console.error(error);
 
@@ -152,7 +159,6 @@ function App() {
         setStatus(
           "Mouse kontrolü aktif. AirPlay güvenlik için açık bırakıldı; kapatmak için oturum düğmesini veya Sol Ctrl + K kullan."
         );
-        setShowIosGuide(true);
       } else {
         setIpadControlActive(false);
         // Kontrol kesin olarak kapalıysa, yalnızca bu denemede açılan AirPlay'i kapat.
@@ -278,7 +284,7 @@ function App() {
         <button onClick={() => setPanel("home")}>Ana Ekran</button>
         <button onClick={scanDevices}>Telefonu Tara</button>
         <button onClick={mirrorPhone}>Telefonu Yansıt</button>
-        <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
+        <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
         <div className="box">
@@ -304,7 +310,7 @@ function App() {
             <div className="home-grid">
               <button onClick={scanDevices}>Android Tara</button>
               <button onClick={mirrorPhone}>Android Yansıt</button>
-              <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
+              <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
               <button onClick={() => setPanel("whatsapp")}>WhatsApp Web</button>
             </div>
           </section>
@@ -328,9 +334,66 @@ function App() {
                 <span className={ipadControlActive ? "status-badge success" : "status-badge"}>
                   {ipadControlActive ? "Kontrol Açık" : "Kontrol Kapalı"}
                 </span>
+                <span className={bluetoothPairingActive ? "status-badge success" : "status-badge"}>
+                  {bluetoothPairingActive ? "Yeni Eşleştirme Açık" : "Yeni Eşleştirme Kapalı"}
+                </span>
               </div>
             </div>
 
+            <div
+              role="note"
+              style={{
+                marginBottom: "18px",
+                padding: "18px 20px",
+                borderRadius: "16px",
+                border: "2px solid #22d3ee",
+                background: "#ecfeff",
+                color: "#0f172a",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 12px",
+                  color: "#0f172a",
+                  opacity: 1,
+                  visibility: "visible",
+                }}
+              >
+                Bağlantı şartları
+              </h3>
+              <ol
+                style={{
+                  margin: 0,
+                  paddingLeft: "22px",
+                  color: "#0f172a",
+                  opacity: 1,
+                  visibility: "visible",
+                  lineHeight: 1.7,
+                }}
+              >
+                <li style={{ color: "#0f172a", opacity: 1 }}>
+                  iPhone veya iPad ile Pardus bilgisayarı
+                  <strong style={{ color: "#0f172a" }}> aynı Wi-Fi ağına </strong>
+                  bağlı olmalıdır.
+                </li>
+                <li style={{ color: "#0f172a", opacity: 1 }}>
+                  iPhone veya iPad üzerinde
+                  <strong style={{ color: "#0f172a" }}> AssistiveTouch açık </strong>
+                  olmalıdır.
+                </li>
+              </ol>
+              <p
+                style={{
+                  margin: "12px 0 0",
+                  color: "#9f1239",
+                  fontWeight: 700,
+                  opacity: 1,
+                  visibility: "visible",
+                }}
+              >
+                Mouse'u Pardus'a geri almak için: Sol Ctrl + K
+              </p>
+            </div>
             <div className="ipad-content">
               <article className="ipad-card">
                 <div className="step-number">1</div>
@@ -373,7 +436,7 @@ function App() {
               <article className="ipad-card">
                 <div className="step-number">2</div>
                 <div>
-                  <h3>iOS kontrolünü tek tuşla yönet</h3>
+                  <h3>AirPlay + iOS kontrolünü tek tuşla yönet</h3>
                   <p>
                     Başlatma sırasında AirPlay penceresi önce açılır. Böylece
                     mouse iOS'a geçtiğinde yansıtma arka menüde kalmaz. Durdurma
@@ -389,7 +452,7 @@ function App() {
                         ? "İşlem sürüyor..."
                         : ipadControlActive
                           ? "Oturumu Kapat ve Mouse'u Pardus'a Geri Al"
-                          : "iOS Kontrolünü Başlat"}
+                          : "AirPlay + iOS Kontrolünü Başlat"}
                     </button>
                   </div>
                 </div>
@@ -398,10 +461,16 @@ function App() {
               <aside className="ipad-help">
                 <h3>Korunan güvenlik akışı</h3>
                 <ol>
+                  <li>iPhone veya iPad ile Pardus aynı Wi-Fi ağına bağlanır.</li>
+                  <li>iOS Ayarlar → Erişilebilirlik → Dokunma bölümünden AssistiveTouch açılır.</li>
                   <li>AirPlay başlatılır ve UxPlay penceresine süre verilir.</li>
                   <li>Yalnızca AirPlay başarılıysa mouse kontrolü başlatılır.</li>
                   <li>iPad'de CommunicatePars ekran yansıtmayı seç.</li>
-                  <li>Pardus Bilgisayarı Bluetoothla Eşlestir.</li>
+                  <li>
+                    Yeni veya eşleşmemiş iOS cihazda Ayarlar → Bluetooth menüsünü
+                    aç ve CommunicatePars-Mouse cihazına bağlan. Eşleştirme modu
+                    3 dakika açık kalır.
+                  </li>
                   <li>Kapatırken önce mevcut mouse geri yükleme endpointi çalışır.</li>
                   <li>Mouse başarıyla dönerse AirPlay kapatılır.</li>
                   <li>Acil durumda her zaman Sol Ctrl + K kullan.</li>
@@ -414,68 +483,6 @@ function App() {
               </aside>
             </div>
           </section>
-        )}
-        {showIosGuide && (
-          <div role="dialog" aria-modal="true" aria-labelledby="ios-guide-title" style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", background: "rgba(15, 23, 42, 0.76)" }}>
-            <section style={{ width: "min(760px, 100%)", maxHeight: "90vh", overflowY: "auto", borderRadius: "20px", padding: "24px", background: "#ffffff", color: "#0f172a", boxShadow: "0 24px 80px rgba(0, 0, 0, 0.35)" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "20px", paddingBottom: "18px", borderBottom: "1px solid #cbd5e1" }}>
-                <div>
-                  <h2 id="ios-guide-title" style={{ margin: "0 0 8px", color: "#111827", opacity: 1, visibility: "visible", textShadow: "none" }}>iOS bağlantısını tamamla</h2>
-                  <p style={{ margin: 0, color: "#334155", opacity: 1, visibility: "visible", lineHeight: 1.6 }}>Önce Bluetooth'a bağlan, sonra ekranı yansıt.</p>
-                </div>
-                <button className="small" onClick={() => setShowIosGuide(false)} style={{ flexShrink: 0 }}>Menüyü Kapat</button>
-              </div>
-
-              <article
-                className="ipad-card"
-                style={{ marginTop: "18px", color: "#ffffff" }}
-              >
-                <div className="step-number">1</div>
-                <div style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
-                  <h3 style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
-                    Bluetooth'a bağlan
-                  </h3>
-                  <ol style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
-                    <li style={{ color: "#ffffff", opacity: 1 }}>
-                      iPhone veya iPad'de <strong style={{ color: "#ffffff" }}>Ayarlar → Bluetooth</strong> menüsünü aç.
-                    </li>
-                    <li style={{ color: "#ffffff", opacity: 1 }}>
-                      <strong style={{ color: "#ffffff" }}>CommunicatePars</strong> cihazına bağlan.
-                    </li>
-                  </ol>
-                </div>
-              </article>
-
-              <article className="ipad-card" style={{ color: "#ffffff" }}>
-                <div className="step-number">2</div>
-                <div style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
-                  <h3 style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
-                    Ekranı yansıt
-                  </h3>
-                  <ol style={{ color: "#ffffff", opacity: 1, visibility: "visible" }}>
-                    <li style={{ color: "#ffffff", opacity: 1 }}>
-                      iOS Denetim Merkezi'ni aç.
-                    </li>
-                    <li style={{ color: "#ffffff", opacity: 1 }}>
-                      <strong style={{ color: "#ffffff" }}>Ekran Yansıtma</strong> düğmesine dokun.
-                    </li>
-                    <li style={{ color: "#ffffff", opacity: 1 }}>
-                      <strong style={{ color: "#ffffff" }}>CommunicatePars</strong> cihazını seç.
-                    </li>
-                  </ol>
-                </div>
-              </article>
-
-              <div role="alert" style={{ marginTop: "16px", padding: "18px", borderRadius: "14px", border: "2px solid #dc2626", background: "#fef2f2", color: "#7f1d1d" }}>
-                <h3 style={{ margin: "0 0 8px", color: "#7f1d1d", opacity: 1 }}>Mouse'u PC'ye geri almak için</h3>
-                <p style={{ margin: 0, color: "#7f1d1d", opacity: 1 }}>Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas.</p>
-              </div>
-
-              <div className="control-buttons" style={{ marginTop: "20px" }}>
-                <button className="control-toggle active" onClick={() => setShowIosGuide(false)}>Tamam</button>
-              </div>
-            </section>
-          </div>
         )}
         {panel === "whatsapp" && (
           <section className="whatsapp">
