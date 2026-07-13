@@ -15,6 +15,10 @@ function App() {
   const [iosSessionBusy, setIosSessionBusy] = useState(false);
   const [bluetoothPairingActive, setBluetoothPairingActive] = useState(false);
   const [iosInfoOpen, setIosInfoOpen] = useState(false);
+  const [hotspotActive, setHotspotActive] = useState(false);
+  const [hotspotInfo, setHotspotInfo] = useState(null);
+  const [sharedFiles, setSharedFiles] = useState([]);
+  const [shareBusy, setShareBusy] = useState(false);
 
   const requestJson = async (url, options = {}) => {
     const response = await fetch(`${API_URL}${url}`, options);
@@ -52,6 +56,7 @@ function App() {
   };
   useEffect(() => {
     refreshIosSessionStatus();
+    refreshSharePanel();
     const timer = window.setInterval(refreshIosSessionStatus, 1500);
     return () => window.clearInterval(timer);
   }, []);
@@ -276,6 +281,85 @@ function App() {
     }
   };
 
+  const refreshSharePanel = async () => {
+    try {
+      const [network, files] = await Promise.all([
+        requestJson("/network/hotspot/status"),
+        requestJson("/share/files"),
+      ]);
+      setHotspotActive(Boolean(network.active));
+      setHotspotInfo(network);
+      setSharedFiles(files.files || []);
+    } catch (error) {
+      console.error("Paylaşım durumu alınamadı:", error);
+      setStatus(error.message);
+    }
+  };
+  const openSharePanel = () => {
+    setPanel("share");
+    refreshSharePanel();
+  };
+  const toggleHotspot = async () => {
+    if (shareBusy) return;
+    setShareBusy(true);
+    try {
+      const data = await requestJson(
+        hotspotActive ? "/network/hotspot/stop" : "/network/hotspot/start",
+        { method: "POST" }
+      );
+      setHotspotActive(Boolean(data.active));
+      setHotspotInfo(data);
+      setStatus(data.message);
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setShareBusy(false);
+      refreshSharePanel();
+    }
+  };
+  const uploadSharedFiles = async (event) => {
+    const selected = Array.from(event.target.files || []);
+    if (!selected.length) return;
+    setShareBusy(true);
+    try {
+      const body = new FormData();
+      selected.forEach((file) => body.append("files", file));
+      const data = await requestJson("/share/upload", { method: "POST", body });
+      setStatus(data.message);
+      event.target.value = "";
+      await refreshSharePanel();
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setShareBusy(false);
+    }
+  };
+  const removeSharedFile = async (id) => {
+    setShareBusy(true);
+    try {
+      const data = await requestJson(`/share/files/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setStatus(data.message);
+      await refreshSharePanel();
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setShareBusy(false);
+    }
+  };
+  const formatBytes = (bytes) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+  const copyText = async (value, label) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(`${label} kopyalandı`);
+    } catch (error) {
+      console.error("Kopyalama başarısız:", error);
+      setStatus(`${label}: ${value}`);
+    }
+  };
   return (
     <div className="app">
       <aside className="sidebar">
@@ -291,6 +375,7 @@ function App() {
         <button onClick={scanDevices}>Telefonu Tara</button>
         <button onClick={mirrorPhone}>Telefonu Yansıt</button>
         <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
+        <button onClick={openSharePanel}>Pardus Ağı + Dosya Paylaşımı</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
         <div className="box">
@@ -486,6 +571,222 @@ function App() {
                   sunucudan tekrar okunur. Backend mouse geri verme kodu
                   değiştirilmemiştir.
                 </p>
+              </aside>
+            </div>
+          </section>
+        )}
+        {panel === "share" && (
+          <section className="ipad-panel">
+            <div className="topbar">
+              <div>
+                <h2>Pardus Ağı ve Dosya Paylaşımı</h2>
+                <p>
+                  Pardus'un Wi-Fi ağını aç, telefonu bağla ve iki cihaz arasında
+                  dosya aktar.
+                </p>
+              </div>
+              <div className="control-buttons">
+                <span className={hotspotActive ? "status-badge success" : "status-badge"}>
+                  {hotspotActive ? "Pardus Ağı Açık" : "Pardus Ağı Kapalı"}
+                </span>
+                <button className="small" onClick={refreshSharePanel} disabled={shareBusy}>
+                  Yenile
+                </button>
+              </div>
+            </div>
+
+            <div className="ipad-content">
+              <article className="ipad-card">
+                <div className="step-number">1</div>
+                <div className="form-area">
+                  <h3>Pardus ağını aç</h3>
+                  <p>
+                    Bu düğme bilgisayarda <strong>CommunicatePars</strong> adlı
+                    yerel Wi-Fi ağını oluşturur.
+                  </p>
+                  <button
+                    className={hotspotActive ? "control-toggle active" : "control-toggle"}
+                    onClick={toggleHotspot}
+                    disabled={shareBusy}
+                  >
+                    {shareBusy
+                      ? "İşlem sürüyor..."
+                      : hotspotActive
+                        ? "Pardus Ağını Kapat"
+                        : "Pardus Ağını Aç"}
+                  </button>
+
+                  <div className="input-device-panel" style={{ marginTop: "16px" }}>
+                    <p>
+                      <strong>Ağ adı:</strong>{" "}
+                      {hotspotInfo?.ssid || "CommunicatePars"}
+                    </p>
+                    <p>
+                      <strong>Wi-Fi şifresi:</strong>{" "}
+                      <code>{hotspotInfo?.password || "CommunicatePars123"}</code>
+                    </p>
+                    <div className="control-buttons" style={{ flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className="small"
+                        onClick={() =>
+                          copyText(
+                            hotspotInfo?.password || "CommunicatePars123",
+                            "Wi-Fi şifresi"
+                          )
+                        }
+                      >
+                        Şifreyi Kopyala
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article className="ipad-card">
+                <div className="step-number">2</div>
+                <div className="form-area">
+                  <h3>Telefonu bağla</h3>
+                  <ol style={{ margin: 0, paddingLeft: "20px", lineHeight: 1.7 }}>
+                    <li>Telefonda <strong>Ayarlar → Wi-Fi</strong> bölümünü aç.</li>
+                    <li><strong>CommunicatePars</strong> ağını seç.</li>
+                    <li><strong>CommunicatePars123</strong> şifresini yaz.</li>
+                    <li>
+                      “İnternet yok” uyarısında <strong>Yine de bağlı kal</strong>
+                      seçeneğini seç.
+                    </li>
+                    <li>Gerekirse mobil veriyi ve VPN'i geçici olarak kapat.</li>
+                  </ol>
+                </div>
+              </article>
+
+              <article className="ipad-card">
+                <div className="step-number">3</div>
+                <div className="form-area">
+                  <h3>Telefonda paylaşım sayfasını aç</h3>
+                  <p>
+                    Safari veya Chrome'un adres çubuğuna aşağıdaki adresi yaz.
+                    Google arama kutusuna yazma.
+                  </p>
+                  <div className="input-device-panel">
+                    <code style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                      {hotspotInfo?.shareUrl || "http://10.42.0.1:5050/share"}
+                    </code>
+                  </div>
+                  <div className="control-buttons" style={{ marginTop: "12px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={() =>
+                        copyText(
+                          hotspotInfo?.shareUrl || "http://10.42.0.1:5050/share",
+                          "Paylaşım adresi"
+                        )
+                      }
+                    >
+                      Adresi Kopyala
+                    </button>
+                  </div>
+                  {!hotspotActive && (
+                    <p style={{ color: "#9f1239", fontWeight: 700 }}>
+                      Önce 1. adımdan Pardus ağını aç.
+                    </p>
+                  )}
+                </div>
+              </article>
+
+              <article className="ipad-card">
+                <div className="step-number">4</div>
+                <div className="form-area">
+                  <h3>PC'den dosya gönder</h3>
+                  <p>
+                    Normal dosyalar için “Dosya Seç”, yalnızca görseller için
+                    “Fotoğraf Seç” düğmesini kullan.
+                  </p>
+                  <div className="control-buttons" style={{ flexWrap: "wrap" }}>
+                    <label
+                      className="input-list-button"
+                      style={{ display: "inline-block", cursor: "pointer" }}
+                    >
+                      {shareBusy ? "Bekleyin..." : "Dosya Seç"}
+                      <input
+                        type="file"
+                        accept="*/*"
+                        multiple
+                        hidden
+                        onChange={uploadSharedFiles}
+                        disabled={shareBusy}
+                      />
+                    </label>
+                    <label
+                      className="input-list-button"
+                      style={{ display: "inline-block", cursor: "pointer" }}
+                    >
+                      Fotoğraf Seç
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={uploadSharedFiles}
+                        disabled={shareBusy}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </article>
+
+              <aside className="ipad-help">
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                  <h3 style={{ margin: 0 }}>Paylaşılan dosyalar</h3>
+                  <button className="small" onClick={refreshSharePanel} disabled={shareBusy}>
+                    Yenile
+                  </button>
+                </div>
+                <p>
+                  Telefonda da bu listenin üzerinde bir <strong>Yenile</strong>
+                  düğmesi bulunur.
+                </p>
+                {sharedFiles.length === 0 ? (
+                  <p>Henüz dosya paylaşılmadı.</p>
+                ) : (
+                  sharedFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      style={{ padding: "12px 0", borderBottom: "1px solid #334155" }}
+                    >
+                      <strong
+                        style={{
+                          fontFamily:
+                            'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif',
+                          overflowWrap: "anywhere",
+                          wordBreak: "break-word",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {file.name}
+                      </strong>
+                      <br />
+                      <small>{formatBytes(file.size)}</small>
+                      <div className="control-buttons" style={{ marginTop: "8px" }}>
+                        <a
+                          href={`${API_URL}${file.downloadUrl}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          İndir
+                        </a>
+                        <button
+                          className="small"
+                          onClick={() => removeSharedFile(file.id)}
+                          disabled={shareBusy}
+                        >
+                          Sil
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </aside>
             </div>
           </section>

@@ -4,10 +4,54 @@ const { exec, spawn } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const multer = require("multer");
 const { GlobalKeyboardListener } = require("node-global-key-listener");
 
 const app = express();
-const PORT = 5050;
+const PORT = Number(process.env.PORT || 5050);
+const HOST = process.env.HOST || "0.0.0.0";
+const SHARE_DIR = process.env.COMMUNICATEPARS_SHARE_DIR ||
+  path.join(os.homedir(), ".local", "share", "communicatepars", "uploads");
+const HOTSPOT_CONNECTION = process.env.COMMUNICATEPARS_HOTSPOT_CONNECTION || "CommunicatePars-Hotspot";
+const HOTSPOT_SSID = process.env.COMMUNICATEPARS_HOTSPOT_SSID || "CommunicatePars";
+const HOTSPOT_PASSWORD = process.env.COMMUNICATEPARS_HOTSPOT_PASSWORD || "CommunicatePars123";
+const MAX_FILE_SIZE = Number(process.env.COMMUNICATEPARS_MAX_FILE_SIZE || 2 * 1024 * 1024 * 1024);
+fs.mkdirSync(SHARE_DIR, { recursive: true });
+
+function repairFilenameEncoding(name) {
+  const value = String(name || "dosya");
+  // Multer/Busboy bazı tarayıcılardan gelen UTF-8 dosya adını Latin-1 gibi okuyabilir.
+  // Yalnızca tipik bozuk karakterler görülürse dönüştürerek normal adları koruruz.
+  if (!/[ÃÄÅÆ]/.test(value)) return value;
+  try {
+    const repaired = Buffer.from(value, "latin1").toString("utf8");
+    return repaired.includes("�") ? value : repaired;
+  } catch (_) {
+    return value;
+  }
+}
+
+function safeOriginalName(name) {
+  const normalized = path.basename(repairFilenameEncoding(name))
+    .normalize("NFKC")
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    .replace(/[\/\\:*?"<>|]/g, "_")
+    .trim();
+  return normalized || "dosya";
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, SHARE_DIR),
+    filename: (_req, file, cb) => {
+      const original = safeOriginalName(file.originalname);
+      const extension = path.extname(original);
+      const stem = path.basename(original, extension).slice(0, 120);
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${stem}${extension}`);
+    },
+  }),
+  limits: { fileSize: MAX_FILE_SIZE, files: 20 },
+});
 
 const HIDCLIENT_PATH =
   "/home/aslpardus/Projeler/communicatepars/tools/hidclient/hidclient";
@@ -620,6 +664,218 @@ app.get("/ipad/control/status", (req, res) => {
   return res.json({ success: true, active });
 });
 
+
+function listSharedFiles() {
+  return fs.readdirSync(SHARE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const fullPath = path.join(SHARE_DIR, entry.name);
+      const stat = fs.statSync(fullPath);
+      const parts = entry.name.split("-");
+      const displayName = repairFilenameEncoding(parts.length >= 3 ? parts.slice(2).join("-") : entry.name);
+      return {
+        id: entry.name,
+        name: displayName,
+        size: stat.size,
+        modifiedAt: stat.mtime.toISOString(),
+        downloadUrl: `/share/files/${encodeURIComponent(entry.name)}`,
+      };
+    })
+    .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+}
+
+function getWifiDevice(callback) {
+  const child = spawn("nmcli", ["-t", "-f", "DEVICE,TYPE,STATE", "device"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (data) => { stdout += data.toString(); });
+  child.stderr.on("data", (data) => { stderr += data.toString(); });
+  child.once("error", callback);
+  child.once("close", (code) => {
+    if (code !== 0) return callback(new Error(stderr.trim() || "Wi-Fi aygıtı bulunamadı"));
+    const rows = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+    const wifi = rows.map((line) => line.split(":"))
+      .find((columns) => columns[1] === "wifi");
+    if (!wifi || !wifi[0]) return callback(new Error("Pardus üzerinde Wi-Fi adaptörü bulunamadı"));
+    callback(null, wifi[0]);
+  });
+}
+
+function getHotspotInfo(callback) {
+  const child = spawn("nmcli", ["-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  child.stdout.on("data", (data) => { stdout += data.toString(); });
+  child.once("error", callback);
+  child.once("close", (code) => {
+    if (code !== 0) return callback(null, { active: false });
+    const line = stdout.split("\n").find((row) => row.startsWith(`${HOTSPOT_CONNECTION}:`));
+    if (!line) return callback(null, { active: false });
+    const columns = line.split(":");
+    const device = columns[columns.length - 1];
+    const ipChild = spawn("nmcli", ["-g", "IP4.ADDRESS", "device", "show", device], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let ipOutput = "";
+    ipChild.stdout.on("data", (data) => { ipOutput += data.toString(); });
+    ipChild.once("close", () => {
+      const address = ipOutput.trim().split("\n")[0].split("/")[0] || "10.42.0.1";
+      callback(null, {
+        active: true,
+        device,
+        ssid: HOTSPOT_SSID,
+        address,
+        shareUrl: `http://${address}:${PORT}/share`,
+      });
+    });
+  });
+}
+
+app.get("/network/hotspot/status", (_req, res) => {
+  getHotspotInfo((error, info) => {
+    if (error) return res.status(500).json({ success: false, active: false, message: error.message });
+    return res.json({
+      success: true,
+      ...info,
+      ...(info.active ? { password: HOTSPOT_PASSWORD } : {}),
+    });
+  });
+});
+
+app.post("/network/hotspot/start", (_req, res) => {
+  if (HOTSPOT_PASSWORD.length < 8) {
+    return res.status(500).json({ success: false, active: false, message: "Hotspot parolası en az 8 karakter olmalıdır" });
+  }
+  getHotspotInfo((statusError, current) => {
+    if (!statusError && current.active) {
+      return res.json({ success: true, ...current, password: HOTSPOT_PASSWORD, message: "Pardus ağı zaten açık" });
+    }
+    getWifiDevice((deviceError, device) => {
+      if (deviceError) return res.status(503).json({ success: false, active: false, message: deviceError.message });
+      const args = [
+        "device", "wifi", "hotspot", "ifname", device,
+        "con-name", HOTSPOT_CONNECTION, "ssid", HOTSPOT_SSID,
+        "password", HOTSPOT_PASSWORD,
+      ];
+      const child = spawn("nmcli", args, { stdio: ["ignore", "pipe", "pipe"] });
+      let stderr = "";
+      child.stderr.on("data", (data) => { stderr += data.toString(); });
+      child.once("error", (error) => res.status(500).json({ success: false, active: false, message: error.message }));
+      child.once("close", (code) => {
+        if (res.headersSent) return;
+        if (code !== 0) return res.status(500).json({ success: false, active: false, message: stderr.trim() || "Pardus ağı açılamadı" });
+        getHotspotInfo((_infoError, info) => res.json({
+          success: true,
+          ...info,
+          active: true,
+          ssid: HOTSPOT_SSID,
+          password: HOTSPOT_PASSWORD,
+          message: "Pardus ağı açıldı. Telefonda bu ağa bağlanıp dosya paylaşım adresini aç.",
+        }));
+      });
+    });
+  });
+});
+
+app.post("/network/hotspot/stop", (_req, res) => {
+  const child = spawn("nmcli", ["connection", "down", HOTSPOT_CONNECTION], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (data) => { stderr += data.toString(); });
+  child.once("error", (error) => res.status(500).json({ success: false, active: false, message: error.message }));
+  child.once("close", (code) => {
+    if (res.headersSent) return;
+    if (code !== 0 && !/not active|unknown connection/i.test(stderr)) {
+      return res.status(500).json({ success: false, active: false, message: stderr.trim() || "Pardus ağı kapatılamadı" });
+    }
+    return res.json({ success: true, active: false, message: "Pardus ağı kapatıldı" });
+  });
+});
+
+app.get("/share/files", (_req, res) => {
+  try {
+    return res.json({ success: true, files: listSharedFiles() });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post("/share/upload", upload.array("files", 20), (req, res) => {
+  const files = (req.files || []).map((file) => ({
+    id: file.filename,
+    name: safeOriginalName(file.originalname),
+    size: file.size,
+  }));
+  return res.status(201).json({ success: true, files, message: `${files.length} dosya alındı` });
+});
+
+app.get("/share/files/:id", (req, res) => {
+  const id = path.basename(String(req.params.id || ""));
+  const fullPath = path.join(SHARE_DIR, id);
+  if (!id || !fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+    return res.status(404).json({ success: false, message: "Dosya bulunamadı" });
+  }
+  const parts = id.split("-");
+  const downloadName = repairFilenameEncoding(parts.length >= 3 ? parts.slice(2).join("-") : id);
+  return res.download(fullPath, downloadName);
+});
+
+app.delete("/share/files/:id", (req, res) => {
+  const id = path.basename(String(req.params.id || ""));
+  const fullPath = path.join(SHARE_DIR, id);
+  if (!id || !fs.existsSync(fullPath)) return res.status(404).json({ success: false, message: "Dosya bulunamadı" });
+  fs.unlinkSync(fullPath);
+  return res.json({ success: true, message: "Dosya silindi" });
+});
+
+app.get("/share/health", (req, res) => {
+  return res.json({
+    success: true,
+    message: "Telefon bağlantısı çalışıyor",
+    server: "CommunicatePars",
+    port: PORT,
+    clientIp: req.ip,
+  });
+});
+
+app.get("/share", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.type("html").send(`<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CommunicatePars Dosya Paylaşımı</title><style>
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,sans-serif;max-width:850px;margin:auto;padding:24px;background:#0f172a;color:#e2e8f0}section{background:#1e293b;padding:22px;border-radius:18px;margin:16px 0}button,input{font:inherit;padding:12px;border-radius:10px;border:0}button,.picker{display:inline-block;background:#22d3ee;color:#082f49;font-weight:800;cursor:pointer;padding:12px;border-radius:10px}.secondary{background:#f8fafc;color:#0f172a}.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}.file{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #334155}.filename{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,sans-serif;font-weight:700;overflow-wrap:anywhere;word-break:break-word}a{color:#67e8f9;font-weight:700}small{color:#94a3b8}@media(max-width:560px){body{padding:14px}.file{align-items:flex-start}.actions>*{width:100%;box-sizing:border-box;text-align:center}}
+</style></head><body><h1>CommunicatePars Dosya Paylaşımı</h1><p>Pardus ile aynı ağa bağlı cihazlardan dosya gönderip indirebilirsin.</p>
+<section><h2>Dosya gönder</h2><p>Belge, PDF, ZIP ve diğer dosyalar için “Dosya seç”; kamera veya galeri için “Fotoğraf seç” kullan.</p>
+<form id="upload"><div class="actions">
+<label class="picker" for="documents">Dosya seç</label><input class="hidden" id="documents" name="documents" type="file" multiple accept="*/*">
+<label class="picker secondary" for="photos">Fotoğraf seç</label><input class="hidden" id="photos" name="photos" type="file" multiple accept="image/*">
+<button id="uploadButton" type="submit" disabled>Seçilenleri gönder</button>
+</div><p id="selection">Henüz dosya seçilmedi.</p></form><p id="message"></p></section>
+<section><div class="actions" style="justify-content:space-between"><h2 style="margin:0">Paylaşılan dosyalar</h2><button id="refresh" type="button">Yenile</button></div><div id="list">Yükleniyor...</div></section>
+<script>
+const list=document.querySelector('#list'),msg=document.querySelector('#message');
+const documents=document.querySelector('#documents'),photos=document.querySelector('#photos'),selection=document.querySelector('#selection'),uploadButton=document.querySelector('#uploadButton');
+const size=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+const selectedFiles=()=>[...documents.files,...photos.files];
+function updateSelection(){const files=selectedFiles();selection.textContent=files.length?files.length+' dosya seçildi: '+files.map(f=>f.name).join(', '):'Henüz dosya seçilmedi.';uploadButton.disabled=!files.length}
+async function refresh(){document.querySelector('#refresh').disabled=true;list.textContent='Yenileniyor...';try{const r=await fetch('/share/files',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.message||'Liste alınamadı');list.innerHTML=d.files.length?d.files.map(f=>'<div class="file"><span class="filename">'+escapeHtml(f.name)+'<br><small>'+size(f.size)+'</small></span><a href="'+f.downloadUrl+'">İndir</a></div>').join(''):'Henüz dosya yok.'}catch(e){list.textContent=e.message}finally{document.querySelector('#refresh').disabled=false}}
+function escapeHtml(v){const e=document.createElement('div');e.textContent=v;return e.innerHTML}
+documents.addEventListener('change',updateSelection);photos.addEventListener('change',updateSelection);document.querySelector('#refresh').addEventListener('click',refresh);
+document.querySelector('#upload').addEventListener('submit',async e=>{e.preventDefault();const files=selectedFiles();if(!files.length)return;msg.textContent='Yükleniyor...';uploadButton.disabled=true;const body=new FormData();for(const f of files)body.append('files',f,f.name);try{const r=await fetch('/share/upload',{method:'POST',body});const d=await r.json();if(!r.ok)throw new Error(d.message||'Yükleme başarısız');msg.textContent=d.message||'Tamam';e.target.reset();updateSelection();await refresh()}catch(error){msg.textContent=error.message}finally{uploadButton.disabled=!selectedFiles().length}});refresh();
+</script></body></html>`);
+});
+
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    return res.status(400).json({ success: false, message: error.code === "LIMIT_FILE_SIZE" ? "Dosya boyutu sınırı aşıldı" : error.message });
+  }
+  return next(error);
+});
+
 app.use((req, res) => {
   return res.status(404).json({
     success: false,
@@ -649,9 +905,21 @@ keyboard.addListener((event) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`CommunicatePars Local Server çalışıyor: http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`CommunicatePars Local Server çalışıyor: http://${HOST}:${PORT}`);
+  console.log(`Telefon için varsayılan hotspot adresi: http://10.42.0.1:${PORT}/share`);
+  console.log(`Bağlantı testi: http://10.42.0.1:${PORT}/share/health`);
   console.log(`X11 ekranı: ${X11_DISPLAY}`);
   console.log(`X11 authority: ${X11_AUTHORITY}`);
   console.log("Acil kapatma kısayolu: Sol Ctrl + K");
+});
+
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} kullanımda. Eski server sürecini kapatıp yeniden başlat.`);
+  } else if (error.code === "EACCES") {
+    console.error(`Port ${PORT} için erişim izni reddedildi.`);
+  } else {
+    console.error("HTTP server başlatılamadı:", error);
+  }
 });
