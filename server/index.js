@@ -815,13 +815,45 @@ app.post("/share/upload", upload.array("files", 20), (req, res) => {
 
 app.get("/share/files/:id", (req, res) => {
   const id = path.basename(String(req.params.id || ""));
-  const fullPath = path.join(SHARE_DIR, id);
-  if (!id || !fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+  const shareRoot = path.resolve(SHARE_DIR);
+  const fullPath = path.resolve(shareRoot, id);
+
+  if (!id || !fullPath.startsWith(shareRoot + path.sep)) {
+    return res.status(400).json({ success: false, message: "Geçersiz dosya adresi" });
+  }
+
+  let stat;
+  try {
+    stat = fs.statSync(fullPath);
+  } catch (error) {
+    console.error("Dosya bulunamadı:", { id, fullPath, error: error.message });
     return res.status(404).json({ success: false, message: "Dosya bulunamadı" });
   }
+
+  if (!stat.isFile()) {
+    return res.status(404).json({ success: false, message: "Dosya bulunamadı" });
+  }
+
   const parts = id.split("-");
-  const downloadName = repairFilenameEncoding(parts.length >= 3 ? parts.slice(2).join("-") : id);
-  return res.download(fullPath, downloadName);
+  const originalName = parts.length >= 3 ? parts.slice(2).join("-") : id;
+  const downloadName = safeOriginalName(repairFilenameEncoding(originalName));
+
+  res.status(200);
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Length", String(stat.size));
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
+  res.setHeader("Cache-Control", "no-store");
+
+  const stream = fs.createReadStream(fullPath);
+  stream.once("error", (error) => {
+    console.error("Dosya okuma hatası:", { id, fullPath, error: error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: `Dosya okunamadı: ${error.message}` });
+    } else {
+      res.destroy(error);
+    }
+  });
+  stream.pipe(res);
 });
 
 app.delete("/share/files/:id", (req, res) => {
@@ -847,14 +879,20 @@ app.get("/share", (_req, res) => {
   res.type("html").send(`<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CommunicatePars Dosya Paylaşımı</title><style>
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,sans-serif;max-width:850px;margin:auto;padding:24px;background:#0f172a;color:#e2e8f0}section{background:#1e293b;padding:22px;border-radius:18px;margin:16px 0}button,input{font:inherit;padding:12px;border-radius:10px;border:0}button,.picker{display:inline-block;background:#22d3ee;color:#082f49;font-weight:800;cursor:pointer;padding:12px;border-radius:10px}.secondary{background:#f8fafc;color:#0f172a}.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}.file{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #334155}.filename{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,sans-serif;font-weight:700;overflow-wrap:anywhere;word-break:break-word}a{color:#67e8f9;font-weight:700}small{color:#94a3b8}@media(max-width:560px){body{padding:14px}.file{align-items:flex-start}.actions>*{width:100%;box-sizing:border-box;text-align:center}}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,sans-serif;max-width:850px;margin:auto;padding:24px;background:#0f172a;color:#e2e8f0}section{background:#1e293b;padding:22px;border-radius:18px;margin:16px 0}button,input{font:inherit;padding:12px;border-radius:10px;border:0}button{display:inline-block;background:#22d3ee;color:#082f49;font-weight:800;cursor:pointer;padding:12px;border-radius:10px}.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.file-picker-group{display:grid;gap:8px;width:100%;margin-bottom:14px}.file-picker-group label{color:#e2e8f0;font-weight:800}.file-picker-group input[type="file"]{display:block;width:100%;box-sizing:border-box;padding:12px;border:2px solid #22d3ee;border-radius:10px;background:#f8fafc;color:#0f172a;cursor:pointer}.file-picker-group input[type="file"]::file-selector-button{margin-right:12px;padding:10px 14px;border:0;border-radius:8px;background:#22d3ee;color:#082f49;font-weight:800;cursor:pointer}.file{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #334155}.filename{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Arial,sans-serif;font-weight:700;overflow-wrap:anywhere;word-break:break-word}a{color:#67e8f9;font-weight:700}small{color:#94a3b8}@media(max-width:560px){body{padding:14px}.file{align-items:flex-start}.actions>*{width:100%;box-sizing:border-box;text-align:center}}
 </style></head><body><h1>CommunicatePars Dosya Paylaşımı</h1><p>Pardus ile aynı ağa bağlı cihazlardan dosya gönderip indirebilirsin.</p>
 <section><h2>Dosya gönder</h2><p>Belge, PDF, ZIP ve diğer dosyalar için “Dosya seç”; kamera veya galeri için “Fotoğraf seç” kullan.</p>
-<form id="upload"><div class="actions">
-<label class="picker" for="documents">Dosya seç</label><input class="hidden" id="documents" name="documents" type="file" multiple accept="*/*">
-<label class="picker secondary" for="photos">Fotoğraf seç</label><input class="hidden" id="photos" name="photos" type="file" multiple accept="image/*">
+<form id="upload">
+<div class="file-picker-group">
+<label for="documents">Dosya seç</label>
+<input id="documents" name="documents" type="file" multiple>
+</div>
+<div class="file-picker-group">
+<label for="photos">Fotoğraf seç</label>
+<input id="photos" name="photos" type="file" multiple accept="image/*">
+</div>
 <button id="uploadButton" type="submit" disabled>Seçilenleri gönder</button>
-</div><p id="selection">Henüz dosya seçilmedi.</p></form><p id="message"></p></section>
+<p id="selection">Henüz dosya seçilmedi.</p></form><p id="message"></p></section>
 <section><div class="actions" style="justify-content:space-between"><h2 style="margin:0">Paylaşılan dosyalar</h2><button id="refresh" type="button">Yenile</button></div><div id="list">Yükleniyor...</div></section>
 <script>
 const list=document.querySelector('#list'),msg=document.querySelector('#message');

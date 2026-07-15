@@ -595,6 +595,57 @@ function App() {
               </div>
             </div>
 
+            <div
+              role="note"
+              style={{
+                margin: "16px 20px 0",
+                padding: "16px 18px",
+                border: "1px solid rgba(34, 211, 238, 0.55)",
+                borderRadius: "16px",
+                background: "rgba(34, 211, 238, 0.08)",
+                color: "#e2e8f0",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    flex: "0 0 30px",
+                    display: "grid",
+                    placeItems: "center",
+                    borderRadius: "50%",
+                    background: "#22d3ee",
+                    color: "#082f49",
+                    fontWeight: 900,
+                  }}
+                >
+                  i
+                </span>
+                <div>
+                  <strong style={{ display: "block", marginBottom: "6px", color: "#a5f3fc" }}>
+                    iPhone ve iPad için Safari bağlantı notu
+                  </strong>
+                  <p style={{ margin: "0 0 8px", color: "#cbd5e1", lineHeight: 1.55 }}>
+                    CommunicatePars paylaşım sayfası, yalnızca oluşturduğun yerel Wi-Fi ağı
+                    içinde çalışır. Safari adresi HTTPS ile açmaya çalışırsa yerel paylaşım
+                    sayfası görüntülenmeyebilir.
+                  </p>
+                  <p style={{ margin: "0 0 8px", color: "#e2e8f0", lineHeight: 1.55 }}>
+                    iPhone veya iPad'de <strong>Ayarlar → Uygulamalar → Safari → Gizlilik ve
+                    Güvenlik</strong> bölümünden <strong>Güvenli Olmayan Bağlantı Uyarısı</strong>
+                    seçeneğini paylaşım süresince kapat. Ardından aşağıdaki paylaşım adresini
+                    Safari'nin adres çubuğuna yeniden yaz.
+                  </p>
+                  <small style={{ color: "#94a3b8", lineHeight: 1.5 }}>
+                    Bu işlem yalnızca CommunicatePars yerel bağlantısını açmak içindir.
+                    Dosya aktarımı tamamlandığında ayarı tekrar açabilirsin.
+                  </small>
+                </div>
+              </div>
+            </div>
+
             <div className="ipad-content">
               <article className="ipad-card">
                 <div className="step-number">1</div>
