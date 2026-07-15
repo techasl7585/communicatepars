@@ -1139,9 +1139,15 @@ fontWeight: 800,
                 }}
               >
                 <div>
-                  <h2 id="ios-info-title" style={{ margin: "0 0 8px" }}>
-                    iOS bağlantısını tamamla
-                  </h2>
+                  <h2
+  id="ios-info-title"
+  style={{
+    margin: "0 0 8px",
+    color: "#111827",
+  }}
+>
+  iOS bağlantısını tamamla
+</h2>
                   <p style={{ margin: 0, color: "#475569", fontSize: "18px" }}>
                     Önce Bluetooth'a bağlan, sonra ekranı yansıt.
                   </p>
@@ -1154,7 +1160,7 @@ fontWeight: 800,
                     padding: "12px 18px",
                     border: 0,
                     borderRadius: "14px",
-                    background: "#3b465f",
+                    background: "#000000",
                     color: "#ffffff",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -1185,7 +1191,7 @@ fontWeight: 800,
                   }}>1</div>
                   <div>
                     <h3 style={{ margin: "2px 0 10px", color: "#ffffff" }}>
-                      Bluetooth'a bağlan
+                      Yönetici Şifresi İstedikten Sonra Bluetooth'a bağlan
                     </h3>
                     <p style={{ margin: 0, color: "#d5d9e8", lineHeight: 1.7 }}>
                       iPhone veya iPad'de Ayarlar → Bluetooth bölümünü aç.
