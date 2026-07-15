@@ -153,34 +153,72 @@ app.get("/android/devices", (_req, res) => {
   });
 });
 app.post("/android/mirror/start", (req, res) => {
-  const mode = req.body?.mode === "wireless" ? "wireless" : "auto";
+  const mode = req.body?.mode;
+  if (![/^usb$/, /^wireless$/].some((pattern) => pattern.test(String(mode)))) {
+    return res.status(400).json({ success: false, message: "USB veya kablosuz bağlantı türünü seç." });
+  }
+
   readAndroidDevices((scanError, devices) => {
     if (scanError) return res.status(500).json({ success: false, message: scanError.message });
     const ready = devices.filter((device) => device.status === "device");
     const wireless = ready.find((device) => device.connection === "Kablosuz");
     const usb = ready.find((device) => device.connection === "USB");
 
-    if (mode === "wireless") {
-      if (!usb) return res.status(400).json({ success: false, message: "Kablosuz hazırlık için telefonu önce USB ile bağla ve USB hata ayıklama iznini onayla." });
-      const child = spawn("scrcpy", ["--serial", usb.id, "--tcpip", "--max-size=1024", "--window-title=CommunicatePars Android Kontrol"], { detached: true, stdio: ["ignore", "ignore", "pipe"] });
+    if (mode === "usb") {
+      if (!usb) {
+        return res.status(404).json({
+          success: false,
+          message: "USB cihazı bulunamadı. USB kablosunu bağla, USB hata ayıklamayı aç ve telefondaki bilgisayar iznini onayla.",
+        });
+      }
+      return startScrcpyForSerial(usb.id, (error, pid) => {
+        if (error) return res.status(500).json({ success: false, message: `USB kontrolü başlatılamadı: ${error.message}` });
+        return res.status(202).json({ success: true, message: "USB Android kontrolü başlatıldı.", connection: "USB", pid });
+      });
+    }
+
+    if (wireless) {
+      return startScrcpyForSerial(wireless.id, (error, pid) => {
+        if (error) return res.status(500).json({ success: false, message: `Kablosuz kontrol başlatılamadı: ${error.message}` });
+        return res.status(202).json({ success: true, message: "Kablosuz Android kontrolü başlatıldı.", connection: "Kablosuz", pid });
+      });
+    }
+
+    if (!usb) {
+      return res.status(400).json({
+        success: false,
+        message: "Kablosuz bağlantı hazır değil. Telefon ve Pardus aynı Wi-Fi ağında olmalı. İlk kurulum için USB kablosunu bağla, USB hata ayıklamayı aç ve bilgisayar iznini onayla. Android 11 ve üzerindeyse Kablosuz hata ayıklamayı da aç.",
+      });
+    }
+
+    exec("command -v scrcpy", (lookupError, stdout) => {
+      if (lookupError || !stdout.trim()) {
+        return res.status(503).json({ success: false, message: "scrcpy bulunamadı" });
+      }
+      const scrcpyPath = stdout.trim().split("\n")[0];
+      const child = spawn(scrcpyPath, [
+        "--serial", usb.id,
+        "--tcpip",
+        "--max-size=1024",
+        "--window-title=CommunicatePars Android Kablosuz Kontrol",
+      ], { detached: true, stdio: ["ignore", "ignore", "pipe"] });
       let answered = false;
       child.once("spawn", () => {
         answered = true;
         child.unref();
-        return res.status(202).json({ success: true, message: "Kablosuz Android kontrolü hazırlanıyor. Telefon ve Pardus aynı Wi-Fi ağında kalmalı.", pid: child.pid });
+        return res.status(202).json({
+          success: true,
+          message: "Kablosuz Android kontrolü hazırlanıyor. Telefon ve Pardus aynı Wi-Fi ağında kalmalı. Pencere açıldıktan sonra USB kablosunu çıkarabilirsin.",
+          connection: "Kablosuz hazırlık",
+          pid: child.pid,
+        });
       });
       child.stderr.on("data", (data) => console.error(`[scrcpy tcpip] ${data.toString().trim()}`));
       child.once("error", (error) => {
-        if (!answered && !res.headersSent) return res.status(500).json({ success: false, message: `Kablosuz bağlantı başlatılamadı: ${error.message}` });
+        if (!answered && !res.headersSent) {
+          return res.status(500).json({ success: false, message: `Kablosuz bağlantı başlatılamadı: ${error.message}` });
+        }
       });
-      return;
-    }
-
-    const selected = wireless || usb;
-    if (!selected) return res.status(404).json({ success: false, message: "Hazır Android cihazı bulunamadı. USB kablosunu bağla, USB hata ayıklamayı aç ve telefondaki izni onayla." });
-    startScrcpyForSerial(selected.id, (error, pid) => {
-      if (error) return res.status(500).json({ success: false, message: `Android kontrolü başlatılamadı: ${error.message}` });
-      return res.status(202).json({ success: true, message: `Android kontrolü ${selected.connection.toLowerCase()} bağlantıyla başlatıldı.`, connection: selected.connection, pid });
     });
   });
 });

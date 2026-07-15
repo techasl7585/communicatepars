@@ -85,11 +85,15 @@ function App() {
       setAndroidBusy(false);
     }
   };
-  const startAndroidMirror = async (mode = "auto") => {
+  const startAndroidMirror = async (mode) => {
     if (androidBusy) return;
     setAndroidBusy(true);
     try {
-      setStatus(mode === "wireless" ? "Kablosuz Android bağlantısı hazırlanıyor..." : "Android kontrolü başlatılıyor...");
+      setStatus(
+        mode === "usb"
+          ? "USB Android kontrolü başlatılıyor..."
+          : "Kablosuz Android kontrolü başlatılıyor..."
+      );
       const data = await requestJson("/android/mirror/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -437,7 +441,7 @@ function App() {
             <div className="topbar">
               <div>
                 <h2>Android Kontrol</h2>
-                <p>Telefonu tara, USB ile güvenli şekilde başlat veya ilk USB kurulumundan sonra kablosuz kullan.</p>
+                <p>USB ve kablosuz bağlantıyı ayrı olarak başlat. Cihaz taraması iki bağlantı türünü de gösterir.</p>
               </div>
               <div className="control-buttons">
                 <button className="small" onClick={scanDevices} disabled={androidBusy}>
@@ -449,26 +453,45 @@ function App() {
               <article className="ipad-card">
                 <div className="step-number">1</div>
                 <div className="form-area">
-                  <h3>İlk bağlantıyı USB ile doğrula</h3>
-                  <p>Android'de Geliştirici seçenekleri ve USB hata ayıklama açık olmalı. Kabloyu bağladıktan sonra telefondaki bilgisayara izin penceresini onayla.</p>
-                  <button className="input-list-button" onClick={scanDevices} disabled={androidBusy}>
-                    Android Cihazı Tara
-                  </button>
+                  <h3>USB kontrol</h3>
+                  <p>En kararlı bağlantıdır. Telefonda Geliştirici seçenekleri ve USB hata ayıklama açık olmalı. USB kablosunu bağla ve telefonda çıkan "Bu bilgisayara izin ver" penceresini onayla.</p>
+                  <div className="control-buttons">
+                    <button className="small" onClick={scanDevices} disabled={androidBusy}>
+                      USB Cihazı Tara
+                    </button>
+                    <button className="control-toggle" onClick={() => startAndroidMirror("usb")} disabled={androidBusy}>
+                      {androidBusy ? "İşlem sürüyor..." : "USB Kontrolü Başlat"}
+                    </button>
+                  </div>
                 </div>
               </article>
               <article className="ipad-card">
                 <div className="step-number">2</div>
                 <div className="form-area">
-                  <h3>Android ekranını kontrol et</h3>
-                  <p>Otomatik başlatma önce hazır kablosuz bağlantıyı, yoksa USB bağlantısını kullanır. En kararlı seçenek budur.</p>
-                  <div className="control-buttons">
-                    <button className="control-toggle" onClick={() => startAndroidMirror("auto")} disabled={androidBusy}>
-                      {androidBusy ? "İşlem sürüyor..." : "Android Kontrolünü Başlat"}
-                    </button>
-                    <button className="small" onClick={() => startAndroidMirror("wireless")} disabled={androidBusy}>
-                      USB ile Kablosuzu Hazırla
-                    </button>
+                  <h3>Kablosuz kontrol</h3>
+                  <p>Kablosuz kontrol için telefon ve Pardus aynı Wi-Fi ağında olmalı. Mevcut otomatik kurulumda ilk bağlantı için USB kablosu ve USB hata ayıklama izni gerekir.</p>
+                  <div
+                    role="note"
+                    style={{
+                      margin: "14px 0",
+                      padding: "14px 16px",
+                      border: "1px solid rgba(34, 211, 238, 0.5)",
+                      borderRadius: "14px",
+                      background: "rgba(34, 211, 238, 0.08)",
+                    }}
+                  >
+                    <strong style={{ color: "#67e8f9" }}>Kablosuz bağlantı şartları</strong>
+                    <ol style={{ margin: "10px 0 0", paddingLeft: "22px", lineHeight: 1.65 }}>
+                      <li>Geliştirici seçeneklerini aç.</li>
+                      <li>USB hata ayıklamayı aç ve ilk kurulumda kabloyla bilgisayar iznini onayla.</li>
+                      <li>Android 11 veya üzerindeyse Kablosuz hata ayıklamayı da açık tut.</li>
+                      <li>Telefon ile Pardus bilgisayarını aynı Wi-Fi ağına bağla.</li>
+                      <li>İlk hazırlık tamamlandıktan sonra USB kablosunu çıkarabilirsin.</li>
+                    </ol>
                   </div>
+                  <button className="control-toggle" onClick={() => startAndroidMirror("wireless")} disabled={androidBusy}>
+                    {androidBusy ? "İşlem sürüyor..." : "Kablosuz Kontrolü Başlat"}
+                  </button>
                 </div>
               </article>
               <aside className="ipad-help">
@@ -482,7 +505,7 @@ function App() {
                     ))}
                   </ol>
                 )}
-                <p>Kablosuz kullanım için telefon ve Pardus aynı Wi-Fi ağında olmalı. İlk hazırlamada USB kablosu gerekir. USB bağlantısı her zaman yedek ve en kararlı yöntem olarak kalır.</p>
+                <p>USB bağlantısı doğrudan kullanılabilir. Kablosuz düğmesi önce hazır kablosuz ADB bağlantısını kullanır; yoksa USB üzerinden TCP/IP bağlantısını hazırlar.</p>
               </aside>
             </div>
           </section>
