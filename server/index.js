@@ -163,7 +163,7 @@ app.post("/airplay/start", (req, res) => {
     }
 
     const uxplayPath = stdout.trim().split("\n")[0];
-    const child = spawn(uxplayPath, ["-n", "CommunicatePars", "-nh"], {
+    const child = spawn(uxplayPath, ["-n", "CommunicatePars | Mouse Pc Geri Al: Sol Ctrl + K", "-nh"], {
       env: {
         ...process.env,
         DISPLAY: X11_DISPLAY,
@@ -387,7 +387,7 @@ app.post("/bluetooth/pairing/start", (req, res) => {
         return res.json({
           success: true,
           active: true,
-          message: "Yeni iOS eşleştirmesi açık. Bluetooth menüsünden CommunicatePars-Mouse cihazına bağlan.",
+          message: "Yeni iOS eşleştirmesi açık. Bluetooth menüsünden pardus (pc adınız) cihazına  bağlan.",
           output: output.trim(),
         });
       }, 900);
@@ -514,7 +514,7 @@ app.post("/ipad/control/start", (req, res) => {
     success: true,
     active: true,
     message:
-      "Kontrol sistemi hazır. Şimdi iPad Bluetooth ayarlarından CommunicatePars-Mouse cihazına yeniden bağlan.",
+      "Kontrol sistemi hazır. Şimdi iPad Bluetooth ayarlarından pardus (pc adınız) cihazına bağlan.",
   });
 });
 

@@ -145,7 +145,7 @@ function App() {
       setIpadControlActive(Boolean(control.active));
       if (!control.active) throw new Error("iOS mouse kontrolü aktif hale gelemedi");
       setStatus(
-        "AirPlay ve iOS kontrolü hazır. Mouse pc'ye geri alma: Sol Ctrl + K."
+        "iOS kontrolü hazır. Mouse pc'ye geri alma: Sol Ctrl + K."
       );
     } catch (error) {
       console.error(error);
@@ -250,7 +250,7 @@ function App() {
 
   const startIpadControl = async () => {
     try {
-      setStatus("iPad kontrol sistemi başlatılıyor...");
+      setStatus("iOS kontrol sistemi başlatılıyor...");
       const data = await requestJson("/ipad/control/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -268,7 +268,7 @@ function App() {
 
   const stopIpadControl = async () => {
     try {
-      setStatus("iPad kontrolü kapatılıyor ve mouse geri yükleniyor...");
+      setStatus("iOS kontrolü kapatılıyor ve mouse geri yükleniyor...");
       const data = await requestJson("/ipad/control/stop", {
         method: "POST",
       });
@@ -374,7 +374,7 @@ function App() {
         <button onClick={() => setPanel("home")}>Ana Ekran</button>
         <button onClick={scanDevices}>Telefonu Tara</button>
         <button onClick={mirrorPhone}>Telefonu Yansıt</button>
-        <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
+        <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
         <button onClick={openSharePanel}>Pardus Ağı + Dosya Paylaşımı</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
@@ -401,7 +401,7 @@ function App() {
             <div className="home-grid">
               <button onClick={scanDevices}>Android Tara</button>
               <button onClick={mirrorPhone}>Android Yansıt</button>
-              <button onClick={() => setPanel("ios")}>iOS AirPlay + Kontrol</button>
+              <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
               <button onClick={() => setPanel("whatsapp")}>WhatsApp Web</button>
             </div>
           </section>
@@ -411,7 +411,7 @@ function App() {
           <section className="ipad-panel">
             <div className="topbar">
               <div>
-                <h2>iOS AirPlay ve Mouse Kontrolü</h2>
+                <h2>iOS Kontrol</h2>
                 <p>
                   Tek tuş önce AirPlay'i açar, ardından mouse kontrolünü iOS'a
                   aktarır. Kapatırken sıra tersine döner: önce mouse Pardus'a
@@ -527,7 +527,7 @@ function App() {
               <article className="ipad-card">
                 <div className="step-number">2</div>
                 <div>
-                  <h3>AirPlay + iOS kontrolünü tek tuşla yönet</h3>
+                  <h3>iOS kontrolünü tek tuşla yönet</h3>
                   <p>
                     Başlatma sırasında AirPlay penceresi önce açılır. Böylece
                     mouse iOS'a geçtiğinde yansıtma arka menüde kalmaz. Durdurma
@@ -543,7 +543,7 @@ function App() {
                         ? "İşlem sürüyor..."
                         : ipadControlActive
                           ? "Oturumu Kapat ve Mouse'u Pardus'a Geri Al"
-                          : "AirPlay + iOS Kontrolünü Başlat"}
+                          : "iOS Kontrolünü Başlat"}
                     </button>
                   </div>
                 </div>
@@ -559,7 +559,7 @@ function App() {
                   <li>iPad'de CommunicatePars ekran yansıtmayı seç.</li>
                   <li>
                     Yeni veya eşleşmemiş iOS cihazda Ayarlar → Bluetooth menüsünü
-                    aç ve CommunicatePars-Mouse cihazına bağlan. Eşleştirme modu
+                    aç ve pardus (pc adınız) cihazına bağlan. Eşleştirme modu
                     3 dakika açık kalır.
                   </li>
                   <li>Kapatırken önce mevcut mouse geri yükleme endpointi çalışır.</li>
@@ -956,7 +956,7 @@ function App() {
                     </h3>
                     <p style={{ margin: 0, color: "#d5d9e8", lineHeight: 1.7 }}>
                       iPhone veya iPad'de Ayarlar → Bluetooth bölümünü aç.
-                      CommunicatePars-Mouse cihazını bul ve bağlan.
+                      pardus (cihaz adınız) cihazını bul ve bağlan.
                     </p>
                   </div>
                 </section>
