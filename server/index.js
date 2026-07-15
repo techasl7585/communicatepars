@@ -962,6 +962,80 @@ app.delete("/share/files/:id", (req, res) => {
   return res.json({ success: true, message: "Dosya silindi" });
 });
 
+function readPowerDevices(callback) {
+  const child = spawn("upower", ["-d"], { stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (data) => { stdout += data.toString(); });
+  child.stderr.on("data", (data) => { stderr += data.toString(); });
+  child.once("error", callback);
+  child.once("close", (code) => {
+    if (code !== 0) {
+      return callback(new Error(stderr.trim() || "Pil bilgileri alınamadı. UPower kurulu olmayabilir."));
+    }
+    const sections = stdout.split(/\n(?=Device:)/).map((section) => section.trim()).filter(Boolean);
+    const devices = [];
+    for (const section of sections) {
+      const getValue = (key) => {
+        const match = section.match(new RegExp(`^\\s*${key}:\\s*(.+)$`, "im"));
+        return match ? match[1].trim() : "";
+      };
+      const devicePath = getValue("Device");
+      const nativePath = getValue("native-path");
+      const vendor = getValue("vendor");
+      const model = getValue("model");
+      const percentage = Number.parseInt(getValue("percentage").replace("%", ""), 10);
+      const state = getValue("state").toLowerCase();
+      const powerSupply = getValue("power supply").toLowerCase() === "yes";
+      const rechargeable = getValue("rechargeable").toLowerCase() === "yes";
+      if (!Number.isFinite(percentage)) continue;
+      const searchableText = [devicePath, nativePath, vendor, model].join(" ").toLowerCase();
+      let type = "other";
+      if (powerSupply || /bat[0-9]|battery_bat|displaydevice/.test(searchableText)) type = "pc";
+      else if (/mouse|pointer|logitech|razer/.test(searchableText)) type = "mouse";
+      else if (/keyboard|kbd/.test(searchableText)) type = "keyboard";
+      else if (/headset|headphone|audio/.test(searchableText)) type = "headset";
+      else if (/bluetooth|bluez|hid/.test(searchableText)) type = "bluetooth";
+      devices.push({
+        id: devicePath || nativePath || `${type}-${devices.length}`,
+        type,
+        name: [vendor, model].filter(Boolean).join(" ") ||
+          (type === "pc" ? "Bilgisayar Pili" :
+            type === "mouse" ? "Bluetooth Mouse" :
+              type === "keyboard" ? "Bluetooth Klavye" :
+                type === "headset" ? "Bluetooth Kulaklık" :
+                  type === "bluetooth" ? "Bluetooth Cihazı" : "Pil"),
+        percentage,
+        state,
+        charging: ["charging", "fully-charged", "pending-charge"].includes(state),
+        rechargeable,
+        nativePath,
+      });
+    }
+    const uniqueDevices = [];
+    for (const device of devices) {
+      const duplicate = uniqueDevices.some((saved) =>
+        saved.id === device.id ||
+        (device.type === "pc" && saved.type === "pc" && saved.percentage === device.percentage)
+      );
+      if (!duplicate) uniqueDevices.push(device);
+    }
+    callback(null, uniqueDevices);
+  });
+}
+app.get("/system/batteries", (_req, res) => {
+  readPowerDevices((error, devices) => {
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Pil bilgileri alınamadı",
+        error: error.message,
+        devices: [],
+      });
+    }
+    return res.json({ success: true, devices });
+  });
+});
 app.get("/share/health", (req, res) => {
   return res.json({
     success: true,

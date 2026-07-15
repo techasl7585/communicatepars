@@ -21,6 +21,8 @@ function App() {
   const [shareBusy, setShareBusy] = useState(false);
   const [androidBusy, setAndroidBusy] = useState(false);
   const [androidDevices, setAndroidDevices] = useState([]);
+  const [batteryDevices, setBatteryDevices] = useState([]);
+  const [batteryLoading, setBatteryLoading] = useState(true);
 
   const requestJson = async (url, options = {}) => {
     const response = await fetch(`${API_URL}${url}`, options);
@@ -42,6 +44,18 @@ function App() {
     return data;
   };
 
+  const refreshBatteryDevices = async () => {
+    try {
+      const data = await requestJson("/system/batteries");
+      setBatteryDevices(data.devices || []);
+    } catch (error) {
+      console.error("Pil bilgileri alınamadı:", error);
+      setBatteryDevices([]);
+    } finally {
+      setBatteryLoading(false);
+    }
+  };
+
   const refreshIosSessionStatus = async () => {
     try {
       const [airplay, control, pairing] = await Promise.all([
@@ -59,8 +73,13 @@ function App() {
   useEffect(() => {
     refreshIosSessionStatus();
     refreshSharePanel();
-    const timer = window.setInterval(refreshIosSessionStatus, 1500);
-    return () => window.clearInterval(timer);
+    refreshBatteryDevices();
+    const iosTimer = window.setInterval(refreshIosSessionStatus, 1500);
+    const batteryTimer = window.setInterval(refreshBatteryDevices, 10000);
+    return () => {
+      window.clearInterval(iosTimer);
+      window.clearInterval(batteryTimer);
+    };
   }, []);
   const scanDevices = async () => {
     if (androidBusy) return;
@@ -421,91 +440,171 @@ function App() {
 
       <main className="main">
         {panel === "home" && (
-          <section className="home">
-            <h2>CommunicatePars</h2>
-            <p>
-              Android telefonu yansıt veya AirPlay ve iOS mouse kontrolünü
-              güvenli tek tuşla birlikte yönet.
-            </p>
-
-            <div className="home-grid">
-              <button onClick={() => setPanel("android")}>Android Kontrol</button>
-              <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
-              <button onClick={() => setPanel("whatsapp")}>WhatsApp Web</button>
+          <section className="home compact-home">
+            <div className="home-intro">
+              <span className="home-label">COMMUNICATEPARS</span>
+              <h2>Cihaz Bağlantı Merkezi</h2>
+              <p></p>
             </div>
+
+            <div className="home-grid compact-actions" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "14px", width: "100%", maxWidth: "1240px", margin: "100px auto 0" }}>
+              <button onClick={() => setPanel("android")}><strong>Android Kontrol</strong></button>
+              <button onClick={() => setPanel("ios")}><strong>iOS Kontrol</strong></button>
+              <button onClick={openSharePanel}><strong>Dosya Paylaşımı</strong></button>
+              <button onClick={() => setPanel("whatsapp")}><strong>WhatsApp Paneli</strong></button>
+            </div>
+
+            <aside className="battery-detail" style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: "300px" }}>
+              <div style={{ marginBottom: "18px" }}>
+                <h3 style={{ margin: 0, fontSize: "22px", lineHeight: 1.25 }}>Pil Durumları</h3>
+              </div>
+              {batteryLoading ? (
+                <small className="battery-unavailable" style={{ fontSize: "15px" }}>Pil bilgileri alınıyor...</small>
+              ) : batteryDevices.length > 0 ? (
+                <div className="battery-device-list" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "14px", width: "100%" }}>
+                  {batteryDevices.map((device) => {
+                    const isPc = device.type === "pc";
+                    const deviceTitle = isPc ? "Bilgisayar Pili (PC)" : device.name;
+                    return (
+                      <div className="pc-battery-chip" key={device.id} style={{ width: "100%", minWidth: 0, minHeight: "76px", padding: "15px 16px", boxSizing: "border-box", margin: 0 }}>
+                        <b style={{ fontSize: "14px", minWidth: "42px", minHeight: "42px" }}>{isPc ? "PC" : device.type === "mouse" ? "M" : device.type === "keyboard" ? "K" : device.type === "headset" ? "H" : "BT"}</b>
+                        <span style={{ minWidth: 0 }}>
+                          <strong style={{ display: "block", fontSize: "17px", lineHeight: 1.3 }}>{deviceTitle}</strong>
+                        </span>
+                        <em style={{ fontSize: "18px", fontWeight: 800, fontStyle: "normal" }}>%{device.percentage}</em>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <small className="battery-unavailable" style={{ fontSize: "15px" }}>Pardus tarafından bildirilen pil bulunamadı.</small>
+              )}
+            </aside>
           </section>
         )}
 
         {panel === "android" && (
-          <section className="ipad-panel">
-            <div className="topbar">
+          <section
+            className="ipad-panel"
+            style={{
+              padding: "24px 22px 52px",
+              minHeight: "100%",
+              boxSizing: "border-box",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              className="topbar"
+              style={{
+                padding: "0 4px 20px",
+                marginBottom: "20px",
+                borderBottom: "1px solid #334155",
+                alignItems: "center",
+              }}
+            >
               <div>
-                <h2>Android Kontrol</h2>
-                <p>USB ve kablosuz bağlantıyı ayrı olarak başlat. Cihaz taraması iki bağlantı türünü de gösterir.</p>
+                <span style={{ display: "block", color: "#22d3ee", fontSize: "12px", fontWeight: 800, letterSpacing: "1.4px", marginBottom: "8px" }}>
+                  
+                </span>
+                <h2 style={{ margin: "0 0 2px", fontSize: "27px" }}>Android Kontrol</h2>
+                <p style={{ margin: 0, maxWidth: "760px", lineHeight: 1.55 }}>
+                  
+                </p>
               </div>
-              <div className="control-buttons">
-                <button className="small" onClick={scanDevices} disabled={androidBusy}>
-                  {androidBusy ? "İşlem sürüyor..." : "Cihazları Yenile"}
-                </button>
-              </div>
+              <button className="small" onClick={scanDevices} disabled={androidBusy} style={{ minWidth: "168px", padding: "13px 18px" }}>
+                {androidBusy ? "Taranıyor..." : "Cihazları Yenile"}
+              </button>
             </div>
-            <div className="ipad-content">
-              <article className="ipad-card">
-                <div className="step-number">1</div>
-                <div className="form-area">
-                  <h3>USB kontrol</h3>
-                  <p>En kararlı bağlantıdır. Telefonda Geliştirici seçenekleri ve USB hata ayıklama açık olmalı. USB kablosunu bağla ve telefonda çıkan "Bu bilgisayara izin ver" penceresini onayla.</p>
-                  <div className="control-buttons">
-                    <button className="small" onClick={scanDevices} disabled={androidBusy}>
+
+            <div style={{ display: "grid", gap: "20px" }}>
+              <article className="ipad-card" style={{ display: "grid", gridTemplateColumns: "54px minmax(0, 1fr)", gap: "20px", padding: "23px", border: "1px solid #334155", borderRadius: "18px" }}>
+                <div className="step-number" style={{ width: "46px", height: "46px", fontSize: "20px" }}>1</div>
+                <div className="form-area" style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "21px" }}>USB ile bağlan</h3>
+                  <p style={{ margin: "0 0 18px", maxWidth: "1000px", lineHeight: 1.6 }}>
+                    Geliştirici seçeneklerini ve USB hata ayıklamayı aç. Kabloyu bağladıktan sonra telefondaki bilgisayar iznini onayla.
+                  </p>
+                  <div className="control-buttons" style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                    <button className="small" onClick={scanDevices} disabled={androidBusy} style={{ minWidth: "158px", padding: "13px 18px" }}>
                       USB Cihazı Tara
                     </button>
-                    <button className="control-toggle" onClick={() => startAndroidMirror("usb")} disabled={androidBusy}>
-                      {androidBusy ? "İşlem sürüyor..." : "USB Kontrolü Başlat"}
+                    <button className="control-toggle" onClick={() => startAndroidMirror("usb")} disabled={androidBusy} style={{ minWidth: "210px", padding: "13px 20px" }}>
+                      {androidBusy ? "İşlem sürüyor..." : "USB Kontrolünü Başlat"}
                     </button>
                   </div>
                 </div>
               </article>
-              <article className="ipad-card">
-                <div className="step-number">2</div>
-                <div className="form-area">
-                  <h3>Kablosuz kontrol</h3>
-                  <p>Kablosuz kontrol için telefon ve Pardus aynı Wi-Fi ağında olmalı. Mevcut otomatik kurulumda ilk bağlantı için USB kablosu ve USB hata ayıklama izni gerekir.</p>
-                  <div
-                    role="note"
-                    style={{
-                      margin: "14px 0",
-                      padding: "14px 16px",
-                      border: "1px solid rgba(34, 211, 238, 0.5)",
-                      borderRadius: "14px",
-                      background: "rgba(34, 211, 238, 0.08)",
-                    }}
-                  >
-                    <strong style={{ color: "#67e8f9" }}>Kablosuz bağlantı şartları</strong>
-                    <ol style={{ margin: "10px 0 0", paddingLeft: "22px", lineHeight: 1.65 }}>
-                      <li>Geliştirici seçeneklerini aç.</li>
-                      <li>USB hata ayıklamayı aç ve ilk kurulumda kabloyla bilgisayar iznini onayla.</li>
-                      <li>Android 11 veya üzerindeyse Kablosuz hata ayıklamayı da açık tut.</li>
-                      <li>Telefon ile Pardus bilgisayarını aynı Wi-Fi ağına bağla.</li>
-                      <li>İlk hazırlık tamamlandıktan sonra USB kablosunu çıkarabilirsin.</li>
-                    </ol>
+
+              <article className="ipad-card" style={{ display: "grid", gridTemplateColumns: "54px minmax(0, 1fr)", gap: "20px", padding: "23px", border: "1px solid #334155", borderRadius: "18px" }}>
+                <div className="step-number" style={{ width: "46px", height: "46px", fontSize: "20px" }}>2</div>
+                <div className="form-area" style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "21px" }}>Kablosuz bağlan</h3>
+                  <p style={{ margin: "0 0 18px", lineHeight: 1.6 }}>
+                    Telefon ile Pardus aynı Wi-Fi ağında olmalıdır. İlk bağlantıda aşağıdaki USB kurulumunu bir kez tamamla.
+                  </p>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)", gap: "16px", alignItems: "stretch", marginBottom: "18px" }}>
+                    <div role="note" style={{ padding: "19px 21px", border: "1px solid rgba(245, 158, 11, 0.65)", borderRadius: "15px", background: "rgba(245, 158, 11, 0.08)" }}>
+                      <span style={{ display: "inline-block", marginBottom: "8px", padding: "4px 9px", borderRadius: "999px", background: "rgba(245, 158, 11, 0.18)", color: "#fbbf24", fontSize: "12px", fontWeight: 800 }}>
+                        İLK BAĞLANTI
+                      </span>
+                      <h4 style={{ margin: "0 0 8px", fontSize: "18px", color: "#f8fafc" }}>Önce USB kablosu gereklidir</h4>
+                      <p style={{ margin: "0 0 14px", lineHeight: 1.55, color: "#cbd5e1" }}>
+                        USB hata ayıklamayı aç, kabloyu bağla ve telefondaki izni onayla. Sistem kablosuz ADB bağlantısını hazırlayacaktır.
+                      </p>
+                      <button className="control-toggle" onClick={() => startAndroidMirror("wireless")} disabled={androidBusy} style={{ width: "100%", padding: "13px 16px" }}>
+                        {androidBusy ? "Kurulum hazırlanıyor..." : "USB ile İlk Kablosuz Kurulumu Yap"}
+                      </button>
+                    </div>
+
+                    <div style={{ padding: "19px 21px", border: "1px solid rgba(34, 211, 238, 0.55)", borderRadius: "15px", background: "rgba(34, 211, 238, 0.07)" }}>
+                      <span style={{ display: "inline-block", marginBottom: "8px", padding: "4px 9px", borderRadius: "999px", background: "rgba(34, 211, 238, 0.14)", color: "#67e8f9", fontSize: "12px", fontWeight: 800 }}>
+                        SONRAKİ BAĞLANTILAR
+                      </span>
+                      <h4 style={{ margin: "0 0 8px", fontSize: "18px", color: "#f8fafc" }}>Kablosuz devam et</h4>
+                      <p style={{ margin: "0 0 14px", lineHeight: 1.55, color: "#cbd5e1" }}>
+                        İlk kurulum tamamlandıysa kabloyu çıkar. Telefon ve Pardus aynı Wi-Fi ağında kalsın.
+                      </p>
+                      <button className="control-toggle" onClick={() => startAndroidMirror("wireless")} disabled={androidBusy} style={{ width: "100%", padding: "13px 16px" }}>
+                        {androidBusy ? "Bağlanıyor..." : "Kablosuz Kontrolü Başlat"}
+                      </button>
+                    </div>
                   </div>
-                  <button className="control-toggle" onClick={() => startAndroidMirror("wireless")} disabled={androidBusy}>
-                    {androidBusy ? "İşlem sürüyor..." : "Kablosuz Kontrolü Başlat"}
-                  </button>
+
+                  <details style={{ padding: "14px 16px", border: "1px solid #334155", borderRadius: "13px", background: "rgba(15, 23, 42, 0.38)" }}>
+                    <summary style={{ cursor: "pointer", color: "#67e8f9", fontWeight: 800 }}>Kurulum şartlarını göster</summary>
+                    <ol style={{ margin: "13px 0 0", paddingLeft: "22px", lineHeight: 1.75 }}>
+                      <li>Telefon ile Pardus bilgisayarını aynı Wi-Fi ağına bağla.</li>
+                      <li>Geliştirici Seçeneklerini Aç</li>
+                      <li>USB hata ayıklamayı aç ve bilgisayar iznini onayla.</li>
+                      <li>Kablosuz hata ayıklamayı aç ve bilgisayar iznini onayla.</li>
+                    </ol>
+                  </details>
                 </div>
               </article>
-              <aside className="ipad-help">
-                <h3>Bağlantı durumu</h3>
+
+              <aside className="ipad-help" style={{ padding: "20px 22px", marginBottom: "12px", border: "1px solid rgba(34, 211, 238, 0.4)", borderRadius: "18px", background: "rgba(34, 211, 238, 0.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", marginBottom: "12px" }}>
+                  <div>
+                    <span style={{ display: "block", color: "#94a3b8", fontSize: "12px", fontWeight: 700, letterSpacing: "1px", marginBottom: "5px" }}>ANLIK DURUM</span>
+                    <h3 style={{ margin: 0, color: "#67e8f9", fontSize: "20px" }}>Bağlantı durumu</h3>
+                  </div>
+                  <span className={androidDevices.length ? "status-badge success" : "status-badge"}>
+                    {androidDevices.length ? `${androidDevices.length} cihaz bulundu` : "Cihaz bekleniyor"}
+                  </span>
+                </div>
                 {androidDevices.length === 0 ? (
-                  <p>Henüz hazır Android bağlantısı bulunamadı.</p>
+                  <p style={{ margin: 0, lineHeight: 1.6 }}>Henüz hazır Android bağlantısı bulunamadı. USB cihazını bağlayıp “Cihazları Yenile” düğmesini kullan.</p>
                 ) : (
-                  <ol>
+                  <div style={{ display: "grid", gap: "10px" }}>
                     {androidDevices.map((device) => (
-                      <li key={device.id}><strong>{device.id}</strong> · {device.connection} · {device.status}</li>
+                      <div key={device.id} style={{ display: "flex", justifyContent: "space-between", gap: "12px", padding: "12px 14px", borderRadius: "12px", background: "rgba(15, 23, 42, 0.55)" }}>
+                        <strong>{device.id}</strong>
+                        <span style={{ color: "#94a3b8" }}>{device.connection} · {device.status}</span>
+                      </div>
                     ))}
-                  </ol>
+                  </div>
                 )}
-                <p>USB bağlantısı doğrudan kullanılabilir. Kablosuz düğmesi önce hazır kablosuz ADB bağlantısını kullanır; yoksa USB üzerinden TCP/IP bağlantısını hazırlar.</p>
               </aside>
             </div>
           </section>
