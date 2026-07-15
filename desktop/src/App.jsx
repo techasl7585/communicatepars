@@ -19,6 +19,8 @@ function App() {
   const [hotspotInfo, setHotspotInfo] = useState(null);
   const [sharedFiles, setSharedFiles] = useState([]);
   const [shareBusy, setShareBusy] = useState(false);
+  const [androidBusy, setAndroidBusy] = useState(false);
+  const [androidDevices, setAndroidDevices] = useState([]);
 
   const requestJson = async (url, options = {}) => {
     const response = await fetch(`${API_URL}${url}`, options);
@@ -61,35 +63,60 @@ function App() {
     return () => window.clearInterval(timer);
   }, []);
   const scanDevices = async () => {
+    if (androidBusy) return;
+    setAndroidBusy(true);
     try {
-      setStatus("Android telefonlar taranıyor...");
-      const data = await requestJson("/devices");
-
-      if (data.devices?.length > 0) {
-        const device = data.devices[0];
-        setDeviceInfo(`${device.id} - ${device.status}`);
-        setStatus("Android telefon bulundu");
+      setStatus("Android cihazlar taranıyor...");
+      const data = await requestJson("/android/devices");
+      const devices = data.devices || [];
+      setAndroidDevices(devices);
+      if (devices.length > 0) {
+        const ready = devices.find((device) => device.status === "device") || devices[0];
+        setDeviceInfo(`${ready.id} - ${ready.connection} - ${ready.status}`);
+        setStatus(`${devices.length} Android bağlantısı bulundu`);
       } else {
         setDeviceInfo("Cihaz bulunamadı");
-        setStatus("Android telefon bulunamadı");
+        setStatus("Android cihaz bulunamadı. USB hata ayıklamayı açıp kabloyu bağla.");
       }
     } catch (error) {
       console.error(error);
-      setStatus(error.message || "Server kapalı olabilir");
+      setStatus(error.message || "Android cihazlar taranamadı");
+    } finally {
+      setAndroidBusy(false);
     }
   };
-
-  const mirrorPhone = async () => {
+  const startAndroidMirror = async (mode = "auto") => {
+    if (androidBusy) return;
+    setAndroidBusy(true);
     try {
-      setStatus("Telefon yansıtma başlatılıyor...");
-      const data = await requestJson("/mirror", { method: "POST" });
+      setStatus(mode === "wireless" ? "Kablosuz Android bağlantısı hazırlanıyor..." : "Android kontrolü başlatılıyor...");
+      const data = await requestJson("/android/mirror/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
       setStatus(data.message);
+      await scanDevicesAfterAction();
     } catch (error) {
       console.error(error);
-      setStatus(error.message || "Yansıtma başlatılamadı");
+      setStatus(error.message || "Android kontrolü başlatılamadı");
+    } finally {
+      setAndroidBusy(false);
     }
   };
-
+  const scanDevicesAfterAction = async () => {
+    try {
+      const data = await requestJson("/android/devices");
+      const devices = data.devices || [];
+      setAndroidDevices(devices);
+      if (devices.length) {
+        const ready = devices.find((device) => device.status === "device") || devices[0];
+        setDeviceInfo(`${ready.id} - ${ready.connection} - ${ready.status}`);
+      }
+    } catch (error) {
+      console.error("Android durumu yenilenemedi:", error);
+    }
+  };
   const startAirplay = async () => {
     try {
       setStatus("AirPlay alıcısı başlatılıyor...");
@@ -372,8 +399,7 @@ function App() {
         </div>
 
         <button onClick={() => setPanel("home")}>Ana Ekran</button>
-        <button onClick={scanDevices}>Telefonu Tara</button>
-        <button onClick={mirrorPhone}>Telefonu Yansıt</button>
+        <button onClick={() => setPanel("android")}>Android Kontrol</button>
         <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
         <button onClick={openSharePanel}>Pardus Ağı + Dosya Paylaşımı</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
@@ -399,14 +425,68 @@ function App() {
             </p>
 
             <div className="home-grid">
-              <button onClick={scanDevices}>Android Tara</button>
-              <button onClick={mirrorPhone}>Android Yansıt</button>
+              <button onClick={() => setPanel("android")}>Android Kontrol</button>
               <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
               <button onClick={() => setPanel("whatsapp")}>WhatsApp Web</button>
             </div>
           </section>
         )}
 
+        {panel === "android" && (
+          <section className="ipad-panel">
+            <div className="topbar">
+              <div>
+                <h2>Android Kontrol</h2>
+                <p>Telefonu tara, USB ile güvenli şekilde başlat veya ilk USB kurulumundan sonra kablosuz kullan.</p>
+              </div>
+              <div className="control-buttons">
+                <button className="small" onClick={scanDevices} disabled={androidBusy}>
+                  {androidBusy ? "İşlem sürüyor..." : "Cihazları Yenile"}
+                </button>
+              </div>
+            </div>
+            <div className="ipad-content">
+              <article className="ipad-card">
+                <div className="step-number">1</div>
+                <div className="form-area">
+                  <h3>İlk bağlantıyı USB ile doğrula</h3>
+                  <p>Android'de Geliştirici seçenekleri ve USB hata ayıklama açık olmalı. Kabloyu bağladıktan sonra telefondaki bilgisayara izin penceresini onayla.</p>
+                  <button className="input-list-button" onClick={scanDevices} disabled={androidBusy}>
+                    Android Cihazı Tara
+                  </button>
+                </div>
+              </article>
+              <article className="ipad-card">
+                <div className="step-number">2</div>
+                <div className="form-area">
+                  <h3>Android ekranını kontrol et</h3>
+                  <p>Otomatik başlatma önce hazır kablosuz bağlantıyı, yoksa USB bağlantısını kullanır. En kararlı seçenek budur.</p>
+                  <div className="control-buttons">
+                    <button className="control-toggle" onClick={() => startAndroidMirror("auto")} disabled={androidBusy}>
+                      {androidBusy ? "İşlem sürüyor..." : "Android Kontrolünü Başlat"}
+                    </button>
+                    <button className="small" onClick={() => startAndroidMirror("wireless")} disabled={androidBusy}>
+                      USB ile Kablosuzu Hazırla
+                    </button>
+                  </div>
+                </div>
+              </article>
+              <aside className="ipad-help">
+                <h3>Bağlantı durumu</h3>
+                {androidDevices.length === 0 ? (
+                  <p>Henüz hazır Android bağlantısı bulunamadı.</p>
+                ) : (
+                  <ol>
+                    {androidDevices.map((device) => (
+                      <li key={device.id}><strong>{device.id}</strong> · {device.connection} · {device.status}</li>
+                    ))}
+                  </ol>
+                )}
+                <p>Kablosuz kullanım için telefon ve Pardus aynı Wi-Fi ağında olmalı. İlk hazırlamada USB kablosu gerekir. USB bağlantısı her zaman yedek ve en kararlı yöntem olarak kalır.</p>
+              </aside>
+            </div>
+          </section>
+        )}
         {panel === "ios" && (
           <section className="ipad-panel">
             <div className="topbar">

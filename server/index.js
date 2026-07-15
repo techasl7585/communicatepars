@@ -106,44 +106,96 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/devices", (req, res) => {
-  exec("adb devices", (error, stdout, stderr) => {
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: "adb devices çalıştırılamadı",
-        error: error.message,
-        stderr,
-      });
-    }
-
-    const devices = stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("List of devices"))
-      .map((line) => {
-        const [id, status] = line.split(/\s+/);
-        return { id, status };
-      });
-
+function readAndroidDevices(callback) {
+  exec("adb devices -l", (error, stdout, stderr) => {
+    if (error) return callback(new Error(stderr.trim() || error.message));
+    const devices = stdout.split("\n").slice(1).map((line) => line.trim()).filter(Boolean).map((line) => {
+      const columns = line.split(/\s+/);
+      const id = columns[0];
+      const status = columns[1] || "unknown";
+      return {
+        id,
+        status,
+        connection: id.includes(":") ? "Kablosuz" : "USB",
+      };
+    });
+    callback(null, devices);
+  });
+}
+function startScrcpyForSerial(serial, callback) {
+  exec("command -v scrcpy", (lookupError, stdout) => {
+    if (lookupError || !stdout.trim()) return callback(new Error("scrcpy bulunamadı"));
+    const scrcpyPath = stdout.trim().split("\n")[0];
+    const args = ["--serial", serial, "--max-size=1024", "--window-title=CommunicatePars Android Kontrol"];
+    const child = spawn(scrcpyPath, args, { detached: true, stdio: ["ignore", "ignore", "pipe"] });
+    let answered = false;
+    child.once("spawn", () => {
+      answered = true;
+      child.unref();
+      callback(null, child.pid);
+    });
+    child.stderr.on("data", (data) => console.error(`[scrcpy] ${data.toString().trim()}`));
+    child.once("error", (error) => {
+      if (!answered) callback(error);
+    });
+  });
+}
+app.get("/devices", (_req, res) => {
+  readAndroidDevices((error, devices) => {
+    if (error) return res.status(500).json({ success: false, message: "Android cihazları taranamadı", error: error.message });
     return res.json({ success: true, devices });
   });
 });
-
-app.post("/mirror", (req, res) => {
-  const child = exec("scrcpy -m1024", (error, stdout, stderr) => {
-    if (error) console.error("scrcpy hatası:", error.message);
-    if (stderr) console.error("scrcpy stderr:", stderr);
-    if (stdout) console.log("scrcpy stdout:", stdout);
-  });
-
-  return res.json({
-    success: true,
-    message: "Telefon yansıtma başlatıldı",
-    pid: child.pid,
+app.get("/android/devices", (_req, res) => {
+  readAndroidDevices((error, devices) => {
+    if (error) return res.status(500).json({ success: false, message: "Android cihazları taranamadı", error: error.message });
+    return res.json({ success: true, devices });
   });
 });
+app.post("/android/mirror/start", (req, res) => {
+  const mode = req.body?.mode === "wireless" ? "wireless" : "auto";
+  readAndroidDevices((scanError, devices) => {
+    if (scanError) return res.status(500).json({ success: false, message: scanError.message });
+    const ready = devices.filter((device) => device.status === "device");
+    const wireless = ready.find((device) => device.connection === "Kablosuz");
+    const usb = ready.find((device) => device.connection === "USB");
 
+    if (mode === "wireless") {
+      if (!usb) return res.status(400).json({ success: false, message: "Kablosuz hazırlık için telefonu önce USB ile bağla ve USB hata ayıklama iznini onayla." });
+      const child = spawn("scrcpy", ["--serial", usb.id, "--tcpip", "--max-size=1024", "--window-title=CommunicatePars Android Kontrol"], { detached: true, stdio: ["ignore", "ignore", "pipe"] });
+      let answered = false;
+      child.once("spawn", () => {
+        answered = true;
+        child.unref();
+        return res.status(202).json({ success: true, message: "Kablosuz Android kontrolü hazırlanıyor. Telefon ve Pardus aynı Wi-Fi ağında kalmalı.", pid: child.pid });
+      });
+      child.stderr.on("data", (data) => console.error(`[scrcpy tcpip] ${data.toString().trim()}`));
+      child.once("error", (error) => {
+        if (!answered && !res.headersSent) return res.status(500).json({ success: false, message: `Kablosuz bağlantı başlatılamadı: ${error.message}` });
+      });
+      return;
+    }
+
+    const selected = wireless || usb;
+    if (!selected) return res.status(404).json({ success: false, message: "Hazır Android cihazı bulunamadı. USB kablosunu bağla, USB hata ayıklamayı aç ve telefondaki izni onayla." });
+    startScrcpyForSerial(selected.id, (error, pid) => {
+      if (error) return res.status(500).json({ success: false, message: `Android kontrolü başlatılamadı: ${error.message}` });
+      return res.status(202).json({ success: true, message: `Android kontrolü ${selected.connection.toLowerCase()} bağlantıyla başlatıldı.`, connection: selected.connection, pid });
+    });
+  });
+});
+app.post("/mirror", (req, res) => {
+  req.body = { ...(req.body || {}), mode: "auto" };
+  readAndroidDevices((scanError, devices) => {
+    if (scanError) return res.status(500).json({ success: false, message: scanError.message });
+    const selected = devices.find((device) => device.status === "device" && device.connection === "Kablosuz") || devices.find((device) => device.status === "device");
+    if (!selected) return res.status(404).json({ success: false, message: "Hazır Android cihazı bulunamadı" });
+    startScrcpyForSerial(selected.id, (error, pid) => {
+      if (error) return res.status(500).json({ success: false, message: error.message });
+      return res.status(202).json({ success: true, message: "Android kontrolü başlatıldı", pid });
+    });
+  });
+});
 app.post("/airplay/start", (req, res) => {
   if (airplayProcess && airplayProcess.exitCode === null) {
     return res.json({
@@ -766,7 +818,15 @@ app.post("/network/hotspot/start", (_req, res) => {
       child.once("error", (error) => res.status(500).json({ success: false, active: false, message: error.message }));
       child.once("close", (code) => {
         if (res.headersSent) return;
-        if (code !== 0) return res.status(500).json({ success: false, active: false, message: stderr.trim() || "Pardus ağı açılamadı" });
+        if (code !== 0) {
+          console.error("Pardus ağı başlatma hatası:", stderr.trim());
+          return res.status(500).json({
+            success: false,
+            active: false,
+            message:
+              "Pardus ağının açılabilmesi için kablosuz özelliğinin açık konumda olması gerekir.",
+          });
+        }
         getHotspotInfo((_infoError, info) => res.json({
           success: true,
           ...info,
