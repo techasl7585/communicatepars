@@ -27,6 +27,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1300,
     height: 850,
+    autoHideMenuBar: true,
     minWidth: 1100,
     minHeight: 700,
     title: "CommunicatePars",
@@ -42,7 +43,7 @@ function createWindow() {
 
   if (process.env.NODE_ENV === "development") {
     win.loadURL("http://127.0.0.1:5173");
-    win.webContents.openDevTools();
+    //win.webContents.openDevTools();                                       //developer konsol açma
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }

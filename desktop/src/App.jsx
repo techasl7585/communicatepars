@@ -417,7 +417,7 @@ function App() {
           <div className="logo">CP</div>
           <div>
             <h1>CommunicatePars</h1>
-            <p>Pardus masaüstü paneli</p>
+            <p></p>
           </div>
         </div>
 
@@ -615,9 +615,6 @@ function App() {
               <div>
                 <h2>iOS Kontrol</h2>
                 <p>
-                  Tek tuş önce AirPlay'i açar, ardından mouse kontrolünü iOS'a
-                  aktarır. Kapatırken sıra tersine döner: önce mouse Pardus'a
-                  geri verilir, yalnızca başarılı olursa AirPlay kapatılır.
                 </p>
               </div>
               <div className="control-buttons">
@@ -691,17 +688,16 @@ function App() {
               <article className="ipad-card">
                 <div className="step-number">1</div>
                 <div className="form-area">
-                  <h3>Mouse aygıtını bir kez seç</h3>
+                  <h3>iOS Kontrolü İçin Önce Mouse aygıtını seç</h3>
                   <p>
-                    Mouse modelinin event numarasını seç. Kontrol etkinken bu
-                    alan kilitlenir; yanlış event değişikliği yapılamaz.
+                   iOS Kontrolü İçin Listeden kullandığın mouse’u (mouse modeli) bul ve başındaki event numarasını aşağıdaki kutucukta seç. 
                   </p>
                   <button
                     className="input-list-button"
                     onClick={listInputDevices}
                     disabled={inputListLoading || ipadControlActive || iosSessionBusy}
                   >
-                    {inputListLoading ? "Aygıtlar Taranıyor..." : "Mouse Indexini Göster"}
+                    {inputListLoading ? "Aygıtlar Taranıyor..." : "Aygıtları Göster"}
                   </button>
                   {inputDevices && (
                     <div className="input-device-panel">
@@ -730,11 +726,19 @@ function App() {
                 <div className="step-number">2</div>
                 <div>
                   <h3>iOS kontrolünü tek tuşla yönet</h3>
-                  <p>
-                    Başlatma sırasında AirPlay penceresi önce açılır. Böylece
-                    mouse iOS'a geçtiğinde yansıtma arka menüde kalmaz. Durdurma
-                    sırasında mouse geri yüklenmeden AirPlay kapatılmaz.
-                  </p>
+                  <p
+  style={{
+    color: "#e2e8f0",
+    fontSize: "18px",
+    lineHeight: 1.6,
+  }}
+>
+  <strong style={{ color: "#fbbf24" }}>
+    Önemli Uyarı:
+  </strong>{" "}
+  Sol CTRL + K yapıp çıkarken yönetici şifresi sorduğunda mouse çalışmayacağından
+  şifre girdikten sonra Enter'a basın.
+</p>
                   <div className="control-buttons">
                     <button
                       className={ipadControlActive ? "control-toggle active" : "control-toggle"}
@@ -752,27 +756,14 @@ function App() {
               </article>
 
               <aside className="ipad-help">
-                <h3>Korunan güvenlik akışı</h3>
+                <h3>Ekstra Bilgiler</h3>
                 <ol>
-                  <li>iPhone veya iPad ile Pardus aynı Wi-Fi ağına bağlanır.</li>
                   <li>iOS Ayarlar → Erişilebilirlik → Dokunma bölümünden AssistiveTouch açılır.</li>
-                  <li>AirPlay başlatılır ve UxPlay penceresine süre verilir.</li>
-                  <li>Yalnızca AirPlay başarılıysa mouse kontrolü başlatılır.</li>
-                  <li>iPad'de CommunicatePars ekran yansıtmayı seç.</li>
-                  <li>
-                    Yeni veya eşleşmemiş iOS cihazda Ayarlar → Bluetooth menüsünü
-                    aç ve pardus (pc adınız) cihazına bağlan. Eşleştirme modu
-                    3 dakika açık kalır.
-                  </li>
-                  <li>Kapatırken önce mevcut mouse geri yükleme endpointi çalışır.</li>
-                  <li>Mouse başarıyla dönerse AirPlay kapatılır.</li>
-                  <li>Acil durumda her zaman Sol Ctrl + K kullan.</li>
+                  <li>Mouse kontrolü olmadan sadece ekranı görmek istediğinizde kontrol geldikten sonra sol ctrl + k yapın</li>
+                  <li>Eğer Fare Yavaşsa AssistiveTouch ayarlarından işaretçi hızı ayarlanabilir</li>
+                  
                 </ol>
-                <p>
-                  Sol Ctrl + K sonrası ekran durumu en geç 1,5 saniye içinde
-                  sunucudan tekrar okunur. Backend mouse geri verme kodu
-                  değiştirilmemiştir.
-                </p>
+                
               </aside>
             </div>
           </section>
@@ -781,10 +772,9 @@ function App() {
           <section className="ipad-panel">
             <div className="topbar">
               <div>
-                <h2>Pardus Ağı ve Dosya Paylaşımı</h2>
+                <h2>Pardus Ağı ve Dosya Paylaşımı Android İos Pc Hertürlü Cihazda Çalışır </h2>
                 <p>
-                  Pardus'un Wi-Fi ağını aç, telefonu bağla ve iki cihaz arasında
-                  dosya aktar.
+            
                 </p>
               </div>
               <div className="control-buttons">
@@ -827,20 +817,16 @@ function App() {
                 </span>
                 <div>
                   <strong style={{ display: "block", marginBottom: "6px", color: "#a5f3fc" }}>
-                    iPhone ve iPad için Safari bağlantı notu
+                    iPhone ve iPad için Safari bağlantı Uyarısı
                   </strong>
-                  <p style={{ margin: "0 0 8px", color: "#cbd5e1", lineHeight: 1.55 }}>
-                    CommunicatePars paylaşım sayfası, yalnızca oluşturduğun yerel Wi-Fi ağı
-                    içinde çalışır. Safari adresi HTTPS ile açmaya çalışırsa yerel paylaşım
-                    sayfası görüntülenmeyebilir.
-                  </p>
+                  
                   <p style={{ margin: "0 0 8px", color: "#e2e8f0", lineHeight: 1.55 }}>
                     iPhone veya iPad'de <strong>Ayarlar → Uygulamalar → Safari → Gizlilik ve
-                    Güvenlik</strong> bölümünden <strong>Güvenli Olmayan Bağlantı Uyarısı</strong>
+                    Güvenlik</strong> bölümünden <strong>Güvenli Olmayan Bağlantı Uyarısı </strong>
                     seçeneğini paylaşım süresince kapat. Ardından aşağıdaki paylaşım adresini
                     Safari'nin adres çubuğuna yeniden yaz.
                   </p>
-                  <small style={{ color: "#94a3b8", lineHeight: 1.5 }}>
+                  <small style={{ color: "#e2e8f0", lineHeight: 1.5 }}>
                     Bu işlem yalnızca CommunicatePars yerel bağlantısını açmak içindir.
                     Dosya aktarımı tamamlandığında ayarı tekrar açabilirsin.
                   </small>
@@ -853,10 +839,15 @@ function App() {
                 <div className="step-number">1</div>
                 <div className="form-area">
                   <h3>Pardus ağını aç</h3>
-                  <p>
-                    Bu düğme bilgisayarda <strong>CommunicatePars</strong> adlı
-                    yerel Wi-Fi ağını oluşturur.
-                  </p>
+                  <p style={{ lineHeight: 1.7 }}>
+  Pardus ağını aç ve dosya paylaşacağın cihazı{" "}
+  <strong>CommunicatePars</strong> adlı Wi-Fi ağına bağla.</p><p>
+   {" "}
+  <strong style={{ color: "#00f7ff" }}>
+   Bağlantının çalışması için mobil veriyi hücresel veriyi kapat.
+  </strong>
+  
+</p>
                   <button
                     className={hotspotActive ? "control-toggle active" : "control-toggle"}
                     onClick={toggleHotspot}
@@ -896,27 +887,12 @@ function App() {
                 </div>
               </article>
 
+              
+
               <article className="ipad-card">
                 <div className="step-number">2</div>
                 <div className="form-area">
-                  <h3>Telefonu bağla</h3>
-                  <ol style={{ margin: 0, paddingLeft: "20px", lineHeight: 1.7 }}>
-                    <li>Telefonda <strong>Ayarlar → Wi-Fi</strong> bölümünü aç.</li>
-                    <li><strong>CommunicatePars</strong> ağını seç.</li>
-                    <li><strong>CommunicatePars123</strong> şifresini yaz.</li>
-                    <li>
-                      “İnternet yok” uyarısında <strong>Yine de bağlı kal</strong>
-                      seçeneğini seç.
-                    </li>
-                    <li>Gerekirse mobil veriyi ve VPN'i geçici olarak kapat.</li>
-                  </ol>
-                </div>
-              </article>
-
-              <article className="ipad-card">
-                <div className="step-number">3</div>
-                <div className="form-area">
-                  <h3>Telefonda paylaşım sayfasını aç</h3>
+                  <h3>Telefonda Tarayıcıyı (Örn: Safari,Chrome) aç</h3>
                   <p>
                     Safari veya Chrome'un adres çubuğuna aşağıdaki adresi yaz.
                     Google arama kutusuna yazma.
@@ -942,50 +918,104 @@ function App() {
                   </div>
                   {!hotspotActive && (
                     <p style={{ color: "#9f1239", fontWeight: 700 }}>
-                      Önce 1. adımdan Pardus ağını aç.
+                      
                     </p>
                   )}
                 </div>
               </article>
 
               <article className="ipad-card">
-                <div className="step-number">4</div>
+                <div className="step-number">3</div>
                 <div className="form-area">
-                  <h3>PC'den dosya gönder</h3>
+                  <h3>PC'den diğer cihaza dosya gönder</h3>
                   <p>
-                    Normal dosyalar için “Dosya Seç”, yalnızca görseller için
+                    Dosyalar için “Dosya Seç”, görseller için
                     “Fotoğraf Seç” düğmesini kullan.
                   </p>
-                  <div className="control-buttons" style={{ flexWrap: "wrap" }}>
-                    <label
-                      className="input-list-button"
-                      style={{ display: "inline-block", cursor: "pointer" }}
-                    >
-                      {shareBusy ? "Bekleyin..." : "Dosya Seç"}
-                      <input
-                        type="file"
-                        accept="*/*"
-                        multiple
-                        hidden
-                        onChange={uploadSharedFiles}
-                        disabled={shareBusy}
-                      />
-                    </label>
-                    <label
-                      className="input-list-button"
-                      style={{ display: "inline-block", cursor: "pointer" }}
-                    >
-                      Fotoğraf Seç
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        hidden
-                        onChange={uploadSharedFiles}
-                        disabled={shareBusy}
-                      />
-                    </label>
-                  </div>
+                <div
+  className="control-buttons"
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(180px, 220px))",
+    justifyContent: "center",
+    gap: "16px",
+    marginTop: "22px",
+    width: "100%",
+  }}
+>
+  <label
+    className="input-list-button"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      minHeight: "50px",
+      padding: "0 20px",
+      boxSizing: "border-box",
+      whiteSpace: "nowrap",
+      borderRadius: "12px",
+background: "#22d3ee",
+color: "#082f49",
+WebkitTextFillColor: "#082f49",
+fontSize: "16px",
+fontWeight: 800,
+cursor: shareBusy ? "not-allowed" : "pointer",
+opacity: shareBusy ? 0.6 : 1,
+    }}
+  >
+    {shareBusy ? "Bekleyin..." : "Dosya Seç"}
+
+    <input
+      type="file"
+      accept="*/*"
+      multiple
+      hidden
+      onChange={uploadSharedFiles}
+      disabled={shareBusy}
+    />
+  </label>
+
+  <label
+    className="input-list-button"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      minHeight: "50px",
+      padding: "0 20px",
+      boxSizing: "border-box",
+      whiteSpace: "nowrap",
+      border: "none",
+borderRadius: "12px",
+background: "#22d3ee",
+color: "#082f49",
+WebkitTextFillColor: "#082f49",
+fontSize: "16px",
+fontWeight: 800,
+cursor: shareBusy ? "not-allowed" : "pointer",
+opacity: shareBusy ? 0.6 : 1,
+     background: "#22d3ee",
+color: "#082f49",
+WebkitTextFillColor: "#082f49",
+fontSize: "16px",
+fontWeight: 800,
+    }}
+  >
+    Fotoğraf Seç
+
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      hidden
+      onChange={uploadSharedFiles}
+      disabled={shareBusy}
+    />
+  </label>
+</div>
+                  
                 </div>
               </article>
 
@@ -996,10 +1026,7 @@ function App() {
                     Yenile
                   </button>
                 </div>
-                <p>
-                  Telefonda da bu listenin üzerinde bir <strong>Yenile</strong>
-                  düğmesi bulunur.
-                </p>
+                
                 {sharedFiles.length === 0 ? (
                   <p>Henüz dosya paylaşılmadı.</p>
                 ) : (
@@ -1044,31 +1071,35 @@ function App() {
             </div>
           </section>
         )}
-        {panel === "whatsapp" && (
-          <section className="whatsapp">
-            <div className="topbar">
-              <div>
-                <h2>WhatsApp Web</h2>
-                <p>
-                  QR kod çıkarsa telefondan WhatsApp → Bağlı Cihazlar → Cihaz
-                  Bağla ile okut.
-                </p>
-              </div>
-              <button className="small" onClick={() => setPanel("home")}>
-                Kapat
-              </button>
-            </div>
-
-            {React.createElement("webview", {
-              className: "webview",
-              src: "https://web.whatsapp.com/",
-              allowpopups: "true",
-              partition: "persist:whatsapp",
-              useragent:
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            })}
-          </section>
-        )}
+{panel === "whatsapp" && (
+  <section
+    className="whatsapp"
+    style={{
+      width: "100%",
+      height: "100vh",
+      margin: 0,
+      padding: 0,
+      overflow: "hidden",
+      background: "#ffffff",
+    }}
+  >
+    {React.createElement("webview", {
+      className: "webview",
+      src: "https://web.whatsapp.com/",
+      allowpopups: "true",
+      partition: "persist:whatsapp",
+      useragent:
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      style: {
+        display: "flex",
+        width: "100%",
+        height: "100%",
+        border: 0,
+      },
+    })}
+  </section>
+)}
+``
         {iosInfoOpen && (
           <div
             role="dialog"
