@@ -20,6 +20,9 @@ function App() {
   const [sharedFiles, setSharedFiles] = useState([]);
   const [shareBusy, setShareBusy] = useState(false);
   const [androidBusy, setAndroidBusy] = useState(false);
+  const [tabletActive, setTabletActive] = useState(false);
+  const [tabletUrls, setTabletUrls] = useState([]);
+  const [tabletBusy, setTabletBusy] = useState(false);
   const [androidDevices, setAndroidDevices] = useState([]);
   const [batteryDevices, setBatteryDevices] = useState([]);
   const [batteryLoading, setBatteryLoading] = useState(true);
@@ -56,6 +59,21 @@ function App() {
     }
   };
 
+  const refreshTabletStatus = async () => {
+    try { const data=await requestJson("/tablet/status"); setTabletActive(Boolean(data.active)); setTabletUrls(data.urls || []); }
+    catch(error) { console.error("Kalemli tablet durumu alınamadı:", error); }
+  };
+  const toggleTablet = async () => {
+    if (tabletBusy) return;
+    setTabletBusy(true);
+    try {
+      setStatus(tabletActive ? "Kalemli tablet kapatılıyor..." : "Kalemli tablet başlatılıyor...");
+      const data=await requestJson(tabletActive ? "/tablet/stop" : "/tablet/start", { method:"POST" });
+      setTabletActive(Boolean(data.active)); setTabletUrls(data.urls || []); setStatus(data.message);
+    } catch(error) { setStatus(error.message || "Kalemli tablet işlemi başarısız"); }
+    finally { setTabletBusy(false); refreshTabletStatus(); }
+  };
+
   const refreshIosSessionStatus = async () => {
     try {
       const [airplay, control, pairing] = await Promise.all([
@@ -72,12 +90,15 @@ function App() {
   };
   useEffect(() => {
     refreshIosSessionStatus();
+    refreshTabletStatus();
     refreshSharePanel();
     refreshBatteryDevices();
     const iosTimer = window.setInterval(refreshIosSessionStatus, 1500);
+    const tabletTimer = window.setInterval(refreshTabletStatus, 2000);
     const batteryTimer = window.setInterval(refreshBatteryDevices, 10000);
     return () => {
       window.clearInterval(iosTimer);
+      window.clearInterval(tabletTimer);
       window.clearInterval(batteryTimer);
     };
   }, []);
@@ -424,18 +445,16 @@ function App() {
         <button onClick={() => setPanel("home")}>Ana Ekran</button>
         <button onClick={() => setPanel("android")}>Android Kontrol</button>
         <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
+        <button onClick={() => setPanel("tablet")}>İkinci Ekran + Dokunmatik Stylus Kontrol</button>
         <button onClick={openSharePanel}>Pardus Ağı + Dosya Paylaşımı</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
         <div className="box">
-          <span>Durum</span>
+          <span>Durum Bilgisi</span>
           <strong>{status}</strong>
         </div>
 
-        <div className="box">
-          <span>Bağlı Android Telefon</span>
-          <p>{deviceInfo}</p>
-        </div>
+        
       </aside>
 
       <main className="main">
@@ -447,9 +466,10 @@ function App() {
               <p></p>
             </div>
 
-            <div className="home-grid compact-actions" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "14px", width: "100%", maxWidth: "1240px", margin: "100px auto 0" }}>
+            <div className="home-grid compact-actions" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "14px", width: "100%", maxWidth: "1240px", margin: "100px auto 0" }}>
               <button onClick={() => setPanel("android")}><strong>Android Kontrol</strong></button>
               <button onClick={() => setPanel("ios")}><strong>iOS Kontrol</strong></button>
+              <button onClick={() => setPanel("tablet")}><strong>İkinci Ekran + Dokunmatik Stylus Kontrol</strong></button>
               <button onClick={openSharePanel}><strong>Dosya Paylaşımı</strong></button>
               <button onClick={() => setPanel("whatsapp")}><strong>WhatsApp Paneli</strong></button>
             </div>
@@ -736,7 +756,7 @@ function App() {
   <strong style={{ color: "#fbbf24" }}>
     Önemli Uyarı:
   </strong>{" "}
-  Sol CTRL + K yapıp çıkarken yönetici şifresi sorduğunda mouse çalışmayacağından
+  Sol CTRL + K yapıp çıkarken şifre ekranında mouse çalışmayacağından
   şifre girdikten sonra Enter'a basın.
 </p>
                   <div className="control-buttons">
@@ -764,6 +784,97 @@ function App() {
                   
                 </ol>
                 
+              </aside>
+            </div>
+          </section>
+        )}
+        {panel === "tablet" && (
+          <section className="ipad-panel">
+            <div
+              className="topbar"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "20px",
+                padding: "20px",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                <h2
+                  style={{
+                    margin: "0 0 10px",
+                    color: "#f8fafc",
+                    fontSize: "27px",
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                    textAlign: "left",
+                  }}
+                >
+                  İkinci Ekran
+                </h2>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#e2e8f0",
+                    fontSize: "16px",
+                    fontWeight: 500,
+                    lineHeight: 1.6,
+                    textAlign: "left",
+                    opacity: 1,
+                  }}
+                >
+                  Tablet veya telefonu ek monitör olarak kullanın. Bilgisayarınızı
+                  uzaktan kontrol edin veya kalem destekli cihazınızla çizim yapın.
+                </p>
+              </div>
+              <span
+                className={tabletActive ? "status-badge success" : "status-badge"}
+                style={{ flexShrink: 0 }}
+              >
+                {tabletActive ? "Weylus Açık" : "Weylus Kapalı"}
+              </span>
+            </div>
+
+            <div className="ipad-content">
+              <article className="ipad-card">
+                <div className="step-number">1</div>
+                <div className="form-area">
+                  <h3>İkinci Ekranı Tek Tuşla Başlat</h3>
+                  <p>
+                    
+                  </p>
+                  <button
+                    className={tabletActive ? "control-toggle active" : "control-toggle"}
+                    onClick={toggleTablet}
+                    disabled={tabletBusy}
+                  >
+                    {tabletBusy
+                      ? "İşlem sürüyor..."
+                      : tabletActive
+                        ? "Kapat"
+                        : "Başlat"}
+                  </button>
+                </div>
+              </article>
+
+             
+
+              <aside className="ipad-help">
+                <h3>Kullanım Koşulları</h3>
+                <ol>
+                 <li style={{ marginBottom: "50px" }}>
+  Tablet ve Pardus aynı ağda olmalıdır.
+</li>
+                  <li>Bilgisayarınızı uzaktan kontrol edip veya kalem destekli cihazınızla çizim yapabilisiniz.</li>
+                  <li>Başlat Tuşuna Basınca Çıkan Pencerede Varsa VAAPI NVENC Ayarları Etkin Olsun.</li>
+                  <li>Çıkan Pencerede Direkt Start Tuşuna Basın Ve Çıkan QR Kodu İkinci Cihazdan Okutun.</li>
+                  <li>Okumazsa Pencerede Çıkan Adresi Tarayıcıya Yazıpta Çalıştırabilirsiniz.</li>
+                  <li>Gözükecek Ekran vs Gibi Ayarları Cihaz Bağlanınca Cihaz Üzerindeki Menüden Ayarlayabilirsiniz.</li>
+                  <li>
+                    Linux uinput izinleri etkinse basınç ve eğim bilgileri aktarılır.
+                  </li>
+                </ol>
               </aside>
             </div>
           </section>
@@ -1099,7 +1210,6 @@ fontWeight: 800,
     })}
   </section>
 )}
-``
         {iosInfoOpen && (
           <div
             role="dialog"
@@ -1139,15 +1249,9 @@ fontWeight: 800,
                 }}
               >
                 <div>
-                  <h2
-  id="ios-info-title"
-  style={{
-    margin: "0 0 8px",
-    color: "#111827",
-  }}
->
-  iOS bağlantısını tamamla
-</h2>
+                  <h2 id="ios-info-title" style={{ margin: "0 0 8px" }}>
+                    iOS bağlantısını tamamla
+                  </h2>
                   <p style={{ margin: 0, color: "#475569", fontSize: "18px" }}>
                     Önce Bluetooth'a bağlan, sonra ekranı yansıt.
                   </p>
@@ -1160,7 +1264,7 @@ fontWeight: 800,
                     padding: "12px 18px",
                     border: 0,
                     borderRadius: "14px",
-                    background: "#000000",
+                    background: "#3b465f",
                     color: "#ffffff",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -1191,7 +1295,7 @@ fontWeight: 800,
                   }}>1</div>
                   <div>
                     <h3 style={{ margin: "2px 0 10px", color: "#ffffff" }}>
-                      Yönetici Şifresi İstedikten Sonra Bluetooth'a bağlan
+                      Bluetooth'a bağlan
                     </h3>
                     <p style={{ margin: 0, color: "#d5d9e8", lineHeight: 1.7 }}>
                       iPhone veya iPad'de Ayarlar → Bluetooth bölümünü aç.

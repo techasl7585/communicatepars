@@ -90,6 +90,7 @@ const X11_AUTHORITY = resolveX11Authority();
 
 let hidclientProcess = null;
 let airplayProcess = null;
+let weylusProcess = null;
 let bluetoothAgentProcess = null;
 let bluetoothPairingTimer = null;
 let activeEventNumber = null;
@@ -1036,6 +1037,63 @@ app.get("/system/batteries", (_req, res) => {
     return res.json({ success: true, devices });
   });
 });
+
+function getTabletUrls(port = 1701) {
+  const urls = [];
+  for (const addresses of Object.values(os.networkInterfaces())) {
+    for (const address of addresses || []) {
+      if (address.family === "IPv4" && !address.internal) urls.push(`http://${address.address}:${port}`);
+    }
+  }
+  return [...new Set(urls)];
+}
+function resolveWeylusCommand(callback) {
+  exec("command -v weylus", (nativeError, nativeStdout) => {
+    if (!nativeError && nativeStdout.trim()) return callback(null, { command: nativeStdout.trim().split("\n")[0], args: [], source: "native" });
+    exec("command -v flatpak", (flatpakError, flatpakStdout) => {
+      if (flatpakError || !flatpakStdout.trim()) return callback(new Error("Weylus bulunamadı. Weylus veya Flatpak sürümünü kur."));
+      exec("flatpak info io.github.electronstudio.WeylusCommunityEdition", (infoError) => {
+        if (infoError) return callback(new Error("Weylus bulunamadı. Weylus Community Edition Flatpak paketini kur."));
+        callback(null, { command: flatpakStdout.trim().split("\n")[0], args: ["run", "io.github.electronstudio.WeylusCommunityEdition"], source: "flatpak" });
+      });
+    });
+  });
+}
+app.post("/tablet/start", (_req, res) => {
+  if (weylusProcess && weylusProcess.exitCode === null) return res.json({ success: true, active: true, urls: getTabletUrls(), message: "İkinci Ekran servisi zaten çalışıyor." });
+  resolveWeylusCommand((lookupError, launcher) => {
+    if (lookupError) return res.status(503).json({ success: false, active: false, message: lookupError.message });
+    const child = spawn(launcher.command, launcher.args, { env: { ...process.env, DISPLAY: X11_DISPLAY, XAUTHORITY: X11_AUTHORITY }, stdio: ["ignore", "pipe", "pipe"] });
+    weylusProcess = child;
+    let answered = false;
+    child.stdout.on("data", data => { const message=data.toString().trim(); if(message) console.log(`[weylus] ${message}`); });
+    child.stderr.on("data", data => { const message=data.toString().trim(); if(message) console.error(`[weylus hata] ${message}`); });
+    child.once("spawn", () => {
+      if (answered || res.headersSent) return;
+      answered = true;
+      res.status(202).json({ success: true, active: true, urls: getTabletUrls(), source: launcher.source, message: "Weylus açıldı. Weylus penceresinde Start düğmesine bas, ardından tablette gösterilen adresi aç." });
+    });
+    child.once("error", error => {
+      if (weylusProcess === child) weylusProcess = null;
+      if (!answered && !res.headersSent) { answered=true; res.status(500).json({ success:false, active:false, message:`İkinci Ekran servisi başlatılamadı: ${error.message}` }); }
+    });
+    child.once("close", code => { console.log(`Weylus kapandı. Kod: ${code}`); if (weylusProcess === child) weylusProcess=null; });
+  });
+});
+app.post("/tablet/stop", (_req, res) => {
+  const child=weylusProcess; weylusProcess=null;
+  if (!child || child.exitCode !== null) return res.json({ success:true, active:false, message:"İkinci Ekran servisi zaten kapalı." });
+  try {
+    child.kill("SIGTERM");
+    const forceTimer=setTimeout(() => { if(child.exitCode===null) child.kill("SIGKILL"); },3000); forceTimer.unref();
+  } catch(error) { return res.status(500).json({ success:false, active:false, message:`İkinci Ekran servisi kapatılamadı: ${error.message}` }); }
+  res.json({ success:true, active:false, message:"İkinci Ekran servisi kapatıldı." });
+});
+app.get("/tablet/status", (_req, res) => {
+  const active=weylusProcess!==null && weylusProcess.exitCode===null;
+  res.json({ success:true, active, urls:getTabletUrls() });
+});
+
 app.get("/share/health", (req, res) => {
   return res.json({
     success: true,
