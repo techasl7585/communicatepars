@@ -445,7 +445,7 @@ function App() {
         <button onClick={() => setPanel("home")}>Ana Ekran</button>
         <button onClick={() => setPanel("android")}>Android Kontrol</button>
         <button onClick={() => setPanel("ios")}>iOS Kontrol</button>
-        <button onClick={() => setPanel("tablet")}>İkinci Ekran + Dokunmatik Stylus Kontrol</button>
+        <button onClick={() => setPanel("tablet")}>İkinci Ekran + Dokunmatik Pc Kontrol</button>
         <button onClick={openSharePanel}>Pardus Ağı + Dosya Paylaşımı</button>
         <button onClick={() => setPanel("whatsapp")}>WhatsApp Paneli</button>
 
@@ -469,7 +469,7 @@ function App() {
             <div className="home-grid compact-actions" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "14px", width: "100%", maxWidth: "1240px", margin: "100px auto 0" }}>
               <button onClick={() => setPanel("android")}><strong>Android Kontrol</strong></button>
               <button onClick={() => setPanel("ios")}><strong>iOS Kontrol</strong></button>
-              <button onClick={() => setPanel("tablet")}><strong>İkinci Ekran + Dokunmatik Stylus Kontrol</strong></button>
+              <button onClick={() => setPanel("tablet")}><strong>İkinci Ekran + Dokunmatik Pc Kontrol</strong></button>
               <button onClick={openSharePanel}><strong>Pardus Ağı + Dosya Paylaşımı</strong></button>
               <button onClick={() => setPanel("whatsapp")}><strong>WhatsApp Paneli</strong></button>
             </div>
@@ -540,7 +540,7 @@ function App() {
               <article className="ipad-card" style={{ display: "grid", gridTemplateColumns: "54px minmax(0, 1fr)", gap: "20px", padding: "23px", border: "1px solid #334155", borderRadius: "18px" }}>
                 <div className="step-number" style={{ width: "46px", height: "46px", fontSize: "20px" }}>1</div>
                 <div className="form-area" style={{ minWidth: 0 }}>
-                  <h3 style={{ margin: "0 0 8px", fontSize: "21px" }}>USB ile bağlan</h3>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "21px" }}>USB İle Kontrol Et</h3>
                   <p style={{ margin: "0 0 18px", maxWidth: "1000px", lineHeight: 1.6 }}>
                     Geliştirici seçeneklerini ve USB hata ayıklamayı aç. Kabloyu bağladıktan sonra telefondaki bilgisayar iznini onayla.
                   </p>
@@ -558,7 +558,7 @@ function App() {
               <article className="ipad-card" style={{ display: "grid", gridTemplateColumns: "54px minmax(0, 1fr)", gap: "20px", padding: "23px", border: "1px solid #334155", borderRadius: "18px" }}>
                 <div className="step-number" style={{ width: "46px", height: "46px", fontSize: "20px" }}>2</div>
                 <div className="form-area" style={{ minWidth: 0 }}>
-                  <h3 style={{ margin: "0 0 8px", fontSize: "21px" }}>Kablosuz bağlan</h3>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "21px" }}>Kablosuz İle Kontrol Et</h3>
                   <p style={{ margin: "0 0 18px", lineHeight: 1.6 }}>
                     Telefon ile Pardus aynı Wi-Fi ağında olmalıdır. İlk bağlantıda aşağıdaki USB kurulumunu bir kez tamamla.
                   </p>
@@ -570,7 +570,7 @@ function App() {
                       </span>
                       <h4 style={{ margin: "0 0 8px", fontSize: "18px", color: "#f8fafc" }}>Önce USB kablosu gereklidir</h4>
                       <p style={{ margin: "0 0 14px", lineHeight: 1.55, color: "#cbd5e1" }}>
-                        USB hata ayıklamayı aç, kabloyu bağla ve telefondaki izni onayla. Sistem kablosuz ADB bağlantısını hazırlayacaktır.
+                        USB hata ayıklamayı Ve Kablosuz Hata Ayıklamayı aç, kabloyu bağla ve telefondaki izni onayla. Sistem kablosuz ADB bağlantısını hazırlayacaktır.
                       </p>
                       <button className="control-toggle" onClick={() => startAndroidMirror("wireless")} disabled={androidBusy} style={{ width: "100%", padding: "13px 16px" }}>
                         {androidBusy ? "Kurulum hazırlanıyor..." : "USB ile İlk Kablosuz Kurulumu Yap"}
@@ -701,7 +701,7 @@ function App() {
                   visibility: "visible",
                 }}
               >
-                Mouse'u Pardus'a geri almak için: Sol Ctrl + K
+                Sistemi Kapatıp Mouse'u Pardus'a geri almak için: Sol Ctrl + K
               </p>
             </div>
             <div className="ipad-content">
@@ -776,7 +776,7 @@ function App() {
               </article>
 
               <aside className="ipad-help">
-                <h3>Ekstra Bilgiler</h3>
+                <h3>Kullanım Kılavuzu</h3>
                 <ol>
                   <li>iOS Ayarlar → Erişilebilirlik → Dokunma bölümünden AssistiveTouch açılır.</li>
                   <li>Mouse kontrolü olmadan sadece ekranı görmek istediğinizde kontrol geldikten sonra sol ctrl + k yapın</li>
@@ -954,8 +954,8 @@ function App() {
   Pardus ağını aç ve dosya paylaşacağın cihazı{" "}
   <strong>CommunicatePars</strong> adlı Wi-Fi ağına bağla.</p><p>
    {" "}
-  <strong style={{ color: "#00f7ff" }}>
-   Bağlantının çalışması için mobil veriyi hücresel veriyi kapat.
+  <strong style={{ color: "#f1f1f1" }}>
+   Bağlantının çalışması için diğer cihazda mobil veriyi hücresel veriyi kapat!
   </strong>
   
 </p>
