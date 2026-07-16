@@ -1,0 +1,39 @@
+CommunicatePars Local Server çalışıyor: http://0.0.0.0:5050
+Telefon için varsayılan hotspot adresi: http://10.42.0.1:5050/share
+Bağlantı testi: http://10.42.0.1:5050/share/health
+X11 ekranı: :1
+X11 authority: /run/user/1000/gdm/Xauthority
+Acil kapatma kısayolu: Sol Ctrl + K
+[bluetoothctl] Waiting to connect to bluetoothd...
+[bluetoothctl] [0;94m[bluetoothctl]> [0m        
+[bluetoothctl] [0;94m[Asel iPad’i]> [0m
+[bluetoothctl] hci0 new_settings: powered bondable ssp br/edr le secure-conn 
+[0;94m[Asel iPad’i]> [0mpower on
+[bluetoothctl] [0;94m[Asel iPad’i]> [0magent NoInputNoOutput
+Failed to register agent object
+[0;94m[Asel iPad’i]> [0mdefault-agent
+No agent is registered
+[0;94m[Asel iPad’i]> [0mpairable on
+[0;94m[Asel iPad’i]> [0mdiscoverable-timeout 180
+[0;94m[Asel iPad’i]> [0mdiscoverable on
+[bluetoothctl] [0;94m[Asel iPad’i]> [0m                                                                               Agent registered
+[0;94m[Asel iPad’i]> [0m                                                                               [[0;93mCHG[0m] Controller 44:03:2C:86:E0:D3 Pairable: yes
+[0;94m[Asel iPad’i]> [0m                                                                               Changing power on succeeded
+[0;94m[Asel iPad’i]> [0m
+[bluetoothctl] Changing pairable on succeeded
+[0;94m[Asel iPad’i]> [0m                                                                               Changing discoverable-timeout 180 succeeded
+[0;94m[Asel iPad’i]> [0m
+[bluetoothctl] hci0 new_settings: powered connectable bondable ssp br/edr le secure-conn 
+[0;94m[Asel iPad’i]> [0m
+[bluetoothctl] [[0;93mCHG[0m] Controller 44:03:2C:86:E0:D3 DiscoverableTimeout: 0x000000b4 (180)
+[bluetoothctl] [0;94m[Asel iPad’i]> [0m
+[bluetoothctl] [[0;93mCHG[0m] Controller 44:03:2C:86:E0:D3 Connectable: yes
+[0;94m[Asel iPad’i]> [0m
+[bluetoothctl] hci0 new_settings: powered connectable discoverable bondable ssp br/edr le secure-conn 
+[0;94m[Asel iPad’i]> [0m
+[bluetoothctl] Changing discoverable on succeeded
+[0;94m[Asel iPad’i]> [0m
+[bluetoothctl] [[0;93mCHG[0m] Controller 44:03:2C:86:E0:D3 Discoverable: yes
+[0;94m[Asel iPad’i]> [0m
+[hidclient hata] Error executing command as another user: Request dismissed
+hidclient kapandı. Kod: 126
