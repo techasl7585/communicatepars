@@ -701,7 +701,7 @@ function App() {
                   visibility: "visible",
                 }}
               >
-                Sistemi Kapatıp Mouse'u Pardus'a geri almak için: Sol Ctrl + K
+                Sistemi Kapatıp Mouse'u Pardus'a geri almak için: Sol Ctrl + K (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
               </p>
             </div>
             <div className="ipad-content">
@@ -757,7 +757,7 @@ function App() {
     Önemli Uyarı:
   </strong>{" "}
   Sol CTRL + K yapıp çıkarken şifre ekranında mouse çalışmayacağından
-  şifre girdikten sonra Enter'a basın.
+  şifre girdikten sonra Enter'a basın.         (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
 </p>
                   <div className="control-buttons">
                     <button
@@ -1262,10 +1262,17 @@ fontWeight: 800,
                 }}
               >
                 <div>
-                  <h2 id="ios-info-title" style={{ margin: "0 0 8px" }}>
-                    iOS bağlantısını tamamla
-                  </h2>
-                  <p style={{ margin: 0, color: "#475569", fontSize: "18px" }}>
+                  <h2
+  id="ios-info-title"
+  style={{
+    margin: "0 0 8px",
+    color: "#000000",
+    fontWeight: 800,
+  }}
+>
+iOS bağlantısını tamamla
+</h2>
+                  <p style={{ margin: 0, color: "#000000", fontSize: "18px" }}>
                     Önce Bluetooth'a bağlan, sonra ekranı yansıt.
                   </p>
                 </div>
@@ -1337,7 +1344,7 @@ fontWeight: 800,
                   }}>2</div>
                   <div>
                     <h3 style={{ margin: "2px 0 10px", color: "#ffffff" }}>
-                      Ekranı yansıt
+                      Bluetooth Bağlandıktan Sonra Ekranı Yansıt
                     </h3>
                     <p style={{ margin: 0, color: "#d5d9e8", lineHeight: 1.7 }}>
                       iPhone veya iPad'de Denetim Merkezi → Ekran Yansıtma
@@ -1353,10 +1360,10 @@ fontWeight: 800,
                 background: "#fff1f2", color: "#9f1239", textAlign: "center",
               }}>
                 <strong style={{ display: "block", marginBottom: "8px", fontSize: "20px" }}>
-                  Mouse'u PC'ye geri almak için
+                  Sistemi Kapatıp Mouse'u PC'ye geri almak için
                 </strong>
                 <span style={{ fontSize: "18px" }}>
-                  Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas.
+                  Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas. (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
                 </span>
               </div>
 
