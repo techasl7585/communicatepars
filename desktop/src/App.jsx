@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
+import logo from "./assets/logo.png";
 
 const API_URL = "http://localhost:5050";
 
@@ -435,7 +436,29 @@ function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="logo">CP</div>
+          <div
+            className="logo"
+            style={{
+              width: "58px",
+              height: "58px",
+              padding: 0,
+              overflow: "hidden",
+              borderRadius: "14px",
+              flexShrink: 0,
+              background: "#0f172a",
+            }}
+          >
+            <img
+              src={logo}
+              alt="CommunicatePars logosu"
+              style={{
+                display: "block",
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          </div>
           <div>
             <h1>CommunicatePars</h1>
             <p></p>
@@ -701,7 +724,7 @@ function App() {
                   visibility: "visible",
                 }}
               >
-                Sistemi Kapatıp Mouse'u Pardus'a geri almak için: Sol Ctrl + K (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
+                Sistemi Kapatıp Mouse'u Pardus'a geri almak için: Sol Ctrl + K
               </p>
             </div>
             <div className="ipad-content">
@@ -757,7 +780,7 @@ function App() {
     Önemli Uyarı:
   </strong>{" "}
   Sol CTRL + K yapıp çıkarken şifre ekranında mouse çalışmayacağından
-  şifre girdikten sonra Enter'a basın.         (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
+  şifre girdikten sonra Enter'a basın.
 </p>
                   <div className="control-buttons">
                     <button
@@ -1132,21 +1155,7 @@ fontWeight: 800,
 
               <aside className="ipad-help">
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-                 <div>
-  <h3 style={{ margin: 0 }}>
-    Paylaşılan dosyalar
-  </h3>
-
-  <p
-    style={{
-      margin: "8px 0 0",
-      color: "#cbd5e1",
-      fontSize: "14px",
-    }}
-  >
-    Dosya Görünmüyorsa Yenile Düğmesine Basın.
-  </p>
-</div>
+                  <h3 style={{ margin: 0 }}>Paylaşılan dosyalar</h3>
                   <button className="small" onClick={refreshSharePanel} disabled={shareBusy}>
                     Yenile
                   </button>
@@ -1176,7 +1185,8 @@ fontWeight: 800,
                       <div className="control-buttons" style={{ marginTop: "8px" }}>
                         <a
                           href={`${API_URL}${file.downloadUrl}`}
-                          download={file.name}
+                          target="_blank"
+                          rel="noreferrer"
                         >
                           İndir
                         </a>
@@ -1262,17 +1272,10 @@ fontWeight: 800,
                 }}
               >
                 <div>
-                  <h2
-  id="ios-info-title"
-  style={{
-    margin: "0 0 8px",
-    color: "#000000",
-    fontWeight: 800,
-  }}
->
-iOS bağlantısını tamamla
-</h2>
-                  <p style={{ margin: 0, color: "#000000", fontSize: "18px" }}>
+                  <h2 id="ios-info-title" style={{ margin: "0 0 8px" }}>
+                    iOS bağlantısını tamamla
+                  </h2>
+                  <p style={{ margin: 0, color: "#475569", fontSize: "18px" }}>
                     Önce Bluetooth'a bağlan, sonra ekranı yansıt.
                   </p>
                 </div>
@@ -1344,7 +1347,7 @@ iOS bağlantısını tamamla
                   }}>2</div>
                   <div>
                     <h3 style={{ margin: "2px 0 10px", color: "#ffffff" }}>
-                      Bluetooth Bağlandıktan Sonra Ekranı Yansıt
+                      Ekranı yansıt
                     </h3>
                     <p style={{ margin: 0, color: "#d5d9e8", lineHeight: 1.7 }}>
                       iPhone veya iPad'de Denetim Merkezi → Ekran Yansıtma
@@ -1360,10 +1363,10 @@ iOS bağlantısını tamamla
                 background: "#fff1f2", color: "#9f1239", textAlign: "center",
               }}>
                 <strong style={{ display: "block", marginBottom: "8px", fontSize: "20px" }}>
-                  Sistemi Kapatıp Mouse'u PC'ye geri almak için
+                  Mouse'u PC'ye geri almak için
                 </strong>
                 <span style={{ fontSize: "18px" }}>
-                  Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas. (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
+                  Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas.
                 </span>
               </div>
 
