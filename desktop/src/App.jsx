@@ -1132,7 +1132,21 @@ fontWeight: 800,
 
               <aside className="ipad-help">
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-                  <h3 style={{ margin: 0 }}>Paylaşılan dosyalar</h3>
+                 <div>
+  <h3 style={{ margin: 0 }}>
+    Paylaşılan dosyalar
+  </h3>
+
+  <p
+    style={{
+      margin: "8px 0 0",
+      color: "#cbd5e1",
+      fontSize: "14px",
+    }}
+  >
+    Dosya Görünmüyorsa Yenile Düğmesine Basın.
+  </p>
+</div>
                   <button className="small" onClick={refreshSharePanel} disabled={shareBusy}>
                     Yenile
                   </button>
@@ -1162,8 +1176,7 @@ fontWeight: 800,
                       <div className="control-buttons" style={{ marginTop: "8px" }}>
                         <a
                           href={`${API_URL}${file.downloadUrl}`}
-                          target="_blank"
-                          rel="noreferrer"
+                          download={file.name}
                         >
                           İndir
                         </a>
