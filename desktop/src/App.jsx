@@ -470,7 +470,7 @@ function App() {
               <button onClick={() => setPanel("android")}><strong>Android Kontrol</strong></button>
               <button onClick={() => setPanel("ios")}><strong>iOS Kontrol</strong></button>
               <button onClick={() => setPanel("tablet")}><strong>İkinci Ekran + Dokunmatik Stylus Kontrol</strong></button>
-              <button onClick={openSharePanel}><strong>Dosya Paylaşımı</strong></button>
+              <button onClick={openSharePanel}><strong>Pardus Ağı + Dosya Paylaşımı</strong></button>
               <button onClick={() => setPanel("whatsapp")}><strong>WhatsApp Paneli</strong></button>
             </div>
 
