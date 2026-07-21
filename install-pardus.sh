@@ -2,6 +2,11 @@
 
 set -Eeuo pipefail
 
+# Pardus grafik oturumlarında /usr/sbin her zaman kullanıcı PATH'ine ekli
+# olmayabilir. iw gibi kurulu sistem araçlarının yanlışlıkla "bulunamadı"
+# sayılmaması için standart sistem yollarını baştan ekle.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
 PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 info() {
@@ -38,18 +43,44 @@ sudo apt-get update
 
 required_packages=(
   acl
+  adb
+  android-sdk-platform-tools-common
+  avahi-daemon
+  avahi-utils
   ca-certificates
   curl
+  ffmpeg
+  flatpak
+  gstreamer1.0-libav
+  gstreamer1.0-plugins-bad
+  gstreamer1.0-plugins-base
+  gstreamer1.0-plugins-good
+  gstreamer1.0-tools
+  iw
   zenity
   bluez
   libbluetooth3
+  libusb-1.0-0
   network-manager
+  pipewire
+  rfkill
   upower
+  uxplay
+  wireplumber
   xinput
   x11-xserver-utils
+  xdg-desktop-portal
+  xdg-desktop-portal-gtk
 )
 
 sudo apt-get install -y "${required_packages[@]}"
+
+if command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl enable --now NetworkManager.service ||
+    fail "NetworkManager servisi başlatılamadı."
+  sudo systemctl enable --now avahi-daemon.service ||
+    fail "Avahi mDNS servisi başlatılamadı."
+fi
 
 package_has_candidate() {
   LC_ALL=C apt-cache policy "$1" 2>/dev/null | awk '
@@ -126,7 +157,7 @@ if ! command -v scrcpy >/dev/null 2>&1; then
   SCRCPY_URL="https://github.com/Genymobile/scrcpy/releases/download/v${SCRCPY_VERSION}/${SCRCPY_ARCHIVE}"
   SCRCPY_TMP="$(mktemp -d)"
 
-  if curl -fL --retry 3 -o "$SCRCPY_TMP/$SCRCPY_ARCHIVE" "$SCRCPY_URL" &&
+  if curl -fL --retry 3 --retry-all-errors -o "$SCRCPY_TMP/$SCRCPY_ARCHIVE" "$SCRCPY_URL" &&
      printf '%s  %s\n' "$SCRCPY_SHA256" "$SCRCPY_TMP/$SCRCPY_ARCHIVE" | sha256sum --check --status; then
     tar -xzf "$SCRCPY_TMP/$SCRCPY_ARCHIVE" -C "$SCRCPY_TMP"
     SCRCPY_SOURCE="$SCRCPY_TMP/scrcpy-linux-x86_64-v${SCRCPY_VERSION}"
@@ -135,7 +166,7 @@ if ! command -v scrcpy >/dev/null 2>&1; then
     sudo cp -a "$SCRCPY_SOURCE/." "$SCRCPY_DEST/"
     sudo ln -sfn "$SCRCPY_DEST/scrcpy" /usr/local/bin/scrcpy
   else
-    warning "scrcpy indirilemedi veya SHA-256 doğrulaması başarısız; Android kontrolü kullanılamaz."
+    fail "scrcpy indirilemedi veya SHA-256 doğrulaması başarısız. İnterneti kontrol edip kurulumu yeniden çalıştırın."
   fi
 
   rm -r -- "$SCRCPY_TMP"
@@ -158,7 +189,7 @@ if ! command -v weylus >/dev/null 2>&1; then
   flatpak remote-add --user --if-not-exists flathub \
     https://flathub.org/repo/flathub.flatpakrepo
   flatpak install --user -y flathub "$WEYLUS_APP_ID"
-  flatpak info "$WEYLUS_APP_ID" >/dev/null 2>&1 ||
+  flatpak info --user "$WEYLUS_APP_ID" >/dev/null 2>&1 ||
     fail "Weylus Flatpak kurulamadı."
 
   # Flatpak içinden X11/Wayland ekranına, ağa ve uinput aygıtına erişim.
@@ -176,6 +207,7 @@ sudo groupadd --system --force uinput
 sudo usermod -aG uinput "$TARGET_USER"
 printf '%s\n' 'KERNEL=="uinput", MODE="0660", GROUP="uinput", OPTIONS+="static_node=uinput", TAG+="uaccess"' |
   sudo tee /etc/udev/rules.d/60-communicatepars-weylus.rules >/dev/null
+printf '%s\n' uinput | sudo tee /etc/modules-load.d/communicatepars-uinput.conf >/dev/null
 sudo modprobe uinput
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=misc --action=add || sudo udevadm trigger
@@ -306,8 +338,12 @@ if command -v systemctl >/dev/null 2>&1; then
   bluetoothctl_retry discoverable on || fail "Bluetooth görünür yapılamadı."
 fi
 
+info "Kurulum sonucu kontrol ediliyor"
+if ! "$PROJECT_DIR/check-system.sh"; then
+  fail "Kurulum kontrolünde hata bulundu. Yukarıdaki HATA satırlarını inceleyin."
+fi
+
 info "Kurulum tamamlandı"
-printf 'Önce kontrol: %s/check-system.sh\n' "$PROJECT_DIR"
 printf 'Uygulamayı aç: %s/start-communicatepars.sh\n' "$PROJECT_DIR"
 
 if ! command -v uxplay >/dev/null 2>&1; then
@@ -315,6 +351,6 @@ if ! command -v uxplay >/dev/null 2>&1; then
 fi
 
 if ! command -v weylus >/dev/null 2>&1 &&
-   ! flatpak info "$WEYLUS_APP_ID" >/dev/null 2>&1; then
+   ! flatpak info --user "$WEYLUS_APP_ID" >/dev/null 2>&1; then
   warning "Weylus kurulu değil; İkinci Ekran özelliği kullanılamaz."
 fi

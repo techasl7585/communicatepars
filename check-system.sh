@@ -2,6 +2,10 @@
 
 set -u
 
+# Pardus masaüstü terminalinde /usr/sbin kullanıcı PATH'inde olmayabilir.
+# Kurulu iw/btmgmt gibi araçları yanlışlıkla eksik sayma.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
 PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ERRORS=0
 WARNINGS=0
@@ -39,7 +43,8 @@ else
   error "Paketteki hidclient x86_64; bu bilgisayar $(uname -m)"
 fi
 
-for command_name in node npm curl pkexec bluetoothctl nmcli upower xinput; do
+for command_name in node npm curl pkexec bluetoothctl nmcli upower xinput \
+  adb scrcpy uxplay flatpak gst-inspect-1.0 avahi-browse iw btmgmt; do
   check_command "$command_name"
 done
 
@@ -166,6 +171,18 @@ if command -v systemctl >/dev/null 2>&1; then
   else
     error "Bluetooth HID uyumluluk modu eksik (input,hostname kapalı olmalı); ./install-pardus.sh çalıştırın"
   fi
+
+  if systemctl is-active --quiet NetworkManager.service 2>/dev/null; then
+    ok "NetworkManager servisi çalışıyor"
+  else
+    error "NetworkManager servisi çalışmıyor"
+  fi
+
+  if systemctl is-active --quiet avahi-daemon.service 2>/dev/null; then
+    ok "Avahi mDNS servisi çalışıyor"
+  else
+    error "Avahi mDNS servisi çalışmıyor; iPad UxPlay'i bulamaz"
+  fi
 fi
 
 if [ -e /dev/uinput ] && [ -w /dev/uinput ]; then
@@ -174,13 +191,77 @@ else
   error "Weylus için /dev/uinput yazma izni yok; kurulumu tekrar çalıştırıp oturumu kapatıp açın"
 fi
 
+if grep -q '^uinput$' /etc/modules-load.d/communicatepars-uinput.conf 2>/dev/null; then
+  ok "uinput yeniden başlatmada otomatik yüklenecek"
+else
+  error "uinput kalıcı yükleme ayarı eksik"
+fi
+
+UINPUT_GROUP="$(getent group uinput 2>/dev/null || true)"
+UINPUT_MEMBERS="${UINPUT_GROUP##*:}"
+case ",${UINPUT_MEMBERS}," in
+  *,"$(id -un)",*) ok "Kullanıcı uinput grubunda" ;;
+  *) error "$(id -un) kullanıcısı uinput grubunda değil" ;;
+esac
+
 if command -v weylus >/dev/null 2>&1; then
   ok "Weylus yerel paket olarak kurulu"
 elif command -v flatpak >/dev/null 2>&1 &&
-     flatpak info io.github.electronstudio.WeylusCommunityEdition >/dev/null 2>&1; then
+     flatpak info --user io.github.electronstudio.WeylusCommunityEdition >/dev/null 2>&1; then
   ok "Weylus Community Edition Flatpak kurulu"
 else
   error "Weylus kurulu değil; ./install-pardus.sh çalıştırın"
+fi
+
+if command -v gst-inspect-1.0 >/dev/null 2>&1; then
+  for gst_element in h264parse avdec_h264 avdec_aac autovideosink autoaudiosink; do
+    if gst-inspect-1.0 "$gst_element" >/dev/null 2>&1; then
+      ok "GStreamer öğesi hazır: $gst_element"
+    else
+      error "GStreamer öğesi eksik: $gst_element"
+    fi
+  done
+fi
+
+if command -v adb >/dev/null 2>&1 && adb version >/dev/null 2>&1; then
+  ok "ADB çalışıyor"
+fi
+
+if dpkg-query -W -f='${Status}' android-sdk-platform-tools-common 2>/dev/null |
+   grep -q 'install ok installed'; then
+  ok "Android USB udev kuralları kurulu"
+else
+  error "Android USB udev kuralları eksik"
+fi
+
+if command -v scrcpy >/dev/null 2>&1; then
+  SCRCPY_PATH="$(readlink -f "$(command -v scrcpy)" 2>/dev/null || command -v scrcpy)"
+  SCRCPY_MISSING_LIBS="$(ldd "$SCRCPY_PATH" 2>/dev/null | awk '/not found/{print $1}' | paste -sd ', ' -)"
+  if [ -n "$SCRCPY_MISSING_LIBS" ]; then
+    error "scrcpy kitaplıkları eksik: $SCRCPY_MISSING_LIBS"
+  elif scrcpy --version >/dev/null 2>&1; then
+    ok "scrcpy çalışıyor"
+  else
+    error "scrcpy kurulu ancak çalıştırılamıyor"
+  fi
+fi
+
+if command -v nmcli >/dev/null 2>&1; then
+  if nmcli -t -f DEVICE,TYPE device status 2>/dev/null | grep -q ':wifi$'; then
+    ok "Wi-Fi aygıtı algılandı"
+  else
+    warning "Wi-Fi aygıtı bulunamadı; Pardus Ağı özelliği bu bilgisayarda kullanılamaz"
+  fi
+
+  # Bazı sürücüler AP desteğini iw çıktısında bildirmediği hâlde NetworkManager
+  # hotspot açabilir. Bu yüzden burada kurulum kesilmez; gerçek sonucu uygulama
+  # içindeki Pardus Ağını Aç işlemi belirler.
+  if command -v iw >/dev/null 2>&1 &&
+     iw list 2>/dev/null | grep -Eq '^[[:space:]]+\* AP$'; then
+    ok "Wi-Fi aygıtı erişim noktası (AP) modunu bildiriyor"
+  else
+    warning "Wi-Fi AP yeteneği iw ile doğrulanamadı; çalışan NetworkManager hotspot akışı korunuyor"
+  fi
 fi
 
 if [ -n "${DISPLAY:-}" ]; then
@@ -188,14 +269,6 @@ if [ -n "${DISPLAY:-}" ]; then
 else
   warning "DISPLAY tanımlı değil; betiği grafik masaüstünde normal kullanıcı olarak çalıştırın"
 fi
-
-for optional_command in adb scrcpy uxplay; do
-  if command -v "$optional_command" >/dev/null 2>&1; then
-    ok "İsteğe bağlı $optional_command kurulu"
-  else
-    warning "İsteğe bağlı $optional_command kurulu değil; ilgili özellik kullanılamaz"
-  fi
-done
 
 printf '\nSonuç: %d hata, %d uyarı\n' "$ERRORS" "$WARNINGS"
 

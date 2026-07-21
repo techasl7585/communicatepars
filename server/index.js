@@ -1545,8 +1545,8 @@ app.post("/tablet/start", (_req, res) => {
           urls,
           source: launcher.source,
           message: urls.length
-            ? `Weylus hazır. iPad Safari'de şu adresi açın: ${urls[0]}`
-            : "Weylus hazır; ancak yerel ağ adresi bulunamadı.",
+            ? `Hazır. iPad Safari'de şu adresi açın: ${urls[0]}`
+            : "Hazır; ancak yerel ağ adresi bulunamadı.",
         });
       });
     });
