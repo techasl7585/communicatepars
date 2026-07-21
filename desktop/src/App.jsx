@@ -2,16 +2,30 @@ import React, { useEffect, useState } from "react";
 import "./App.css";
 import logo from "./assets/logo.png";
 
-const API_URL = "http://localhost:5050";
+const API_URL = "http://127.0.0.1:5050";
+const DEFAULT_INPUT_EVENT = "8";
+const isSelectableInput = (device) => Boolean(
+  device && (
+    typeof device.selectable === "boolean"
+      ? device.selectable
+      : device.relative && !/touch[ -]?pad|track[ -]?pad|clickpad/i.test(device.name || "")
+  )
+);
+
+const findSelectedInputDevice = (devices, requestedEvent) => devices.find(
+  (device) => String(device.eventNumber) === String(requestedEvent)
+) || null;
 
 function App() {
   const [status, setStatus] = useState("Hazır");
   const [deviceInfo, setDeviceInfo] = useState("Henüz cihaz taranmadı");
   const [panel, setPanel] = useState("home");
-  const [inputEvent, setInputEvent] = useState("8");
+  const [inputEvent, setInputEvent] = useState(DEFAULT_INPUT_EVENT);
   const [ipadControlActive, setIpadControlActive] = useState(false);
+  const [ipadBluetoothConnected, setIpadBluetoothConnected] = useState(false);
   const [airplayActive, setAirplayActive] = useState(false);
   const [inputDevices, setInputDevices] = useState("");
+  const [inputDeviceOptions, setInputDeviceOptions] = useState([]);
   const [inputListLoading, setInputListLoading] = useState(false);
   const [iosSessionBusy, setIosSessionBusy] = useState(false);
   const [bluetoothPairingActive, setBluetoothPairingActive] = useState(false);
@@ -20,6 +34,7 @@ function App() {
   const [hotspotInfo, setHotspotInfo] = useState(null);
   const [sharedFiles, setSharedFiles] = useState([]);
   const [shareBusy, setShareBusy] = useState(false);
+  const [shareRefreshing, setShareRefreshing] = useState(false);
   const [androidBusy, setAndroidBusy] = useState(false);
   const [tabletActive, setTabletActive] = useState(false);
   const [tabletUrls, setTabletUrls] = useState([]);
@@ -84,6 +99,7 @@ function App() {
       ]);
       setAirplayActive(Boolean(airplay.active));
       setIpadControlActive(Boolean(control.active));
+      setIpadBluetoothConnected(Boolean(control.connected));
       setBluetoothPairingActive(Boolean(pairing.active));
     } catch (error) {
       console.error("iOS oturum durumu alınamadı:", error);
@@ -190,14 +206,26 @@ function App() {
     setIosSessionBusy(true);
     let airplayStartedByThisAttempt = false;
     try {
-      // Önce yeni/eşleşmemiş iOS cihazlar için eşleştirme modunu aç.
-      // Mouse geri yükleme mekanizmasına dokunulmaz.
-      setStatus("Bluetooth yeni cihaz eşleştirme modu açılıyor...");
-      const pairing = await requestJson("/bluetooth/pairing/start", { method: "POST" });
-      setBluetoothPairingActive(Boolean(pairing.active));
+      let selectedEvent = inputEvent.trim();
+      setStatus("1/4 Bu bilgisayardaki mouse aygıtı doğrulanıyor...");
+      const inputData = await requestJson("/ipad/input/list");
+      const devices = inputData.devices || [];
+      setInputDeviceOptions(devices);
+      setInputDevices(inputData.output || "");
+      const selectedDevice = findSelectedInputDevice(devices, selectedEvent);
+      if (!selectedDevice) {
+        throw new Error(`Seçtiğiniz event${selectedEvent || "?"} bu bilgisayarda bulunamadı. Menüden '+' işaretli mouse'u seçin.`);
+      }
+      if (!isSelectableInput(selectedDevice)) {
+        throw new Error(
+          selectedDevice.touchpad
+            ? `Seçtiğiniz event${selectedEvent} bir touchpad; touchpad desteklenmez.`
+            : `Seçtiğiniz event${selectedEvent} kullanılamaz. Menüden '+' işaretli mouse'u seçin.`
+        );
+      }
 
-      // Mevcut sıra korunur: önce AirPlay, sonra mouse aktarımı.
-      setStatus("1/2 AirPlay başlatılıyor...");
+      // AirPlay hata verecekse mouse henüz Pardus'tayken belli olsun.
+      setStatus("2/4 AirPlay başlatılıyor...");
       if (!airplayActive) {
         const airplay = await requestJson("/airplay/start", { method: "POST" });
         if (!airplay.active) throw new Error("AirPlay aktif hale gelemedi");
@@ -205,19 +233,23 @@ function App() {
         airplayStartedByThisAttempt = true;
       }
 
-      // UxPlay penceresinin Pardus'ta öne gelmesi için kısa süre tanı.
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-
-      setStatus("2/2 iOS mouse kontrolü başlatılıyor...");
+      // HID sunucusu önce SDP/L2CAP soketlerini ve BlueZ uyumluluk modunu
+      // hazırlar. iPad eşleştirmesi bundan sonra açılmalıdır.
+      setStatus("3/4 Bluetooth HID hazırlanıyor; parola penceresini onaylayın...");
       const control = await requestJson("/ipad/control/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventNumber: inputEvent }),
+        body: JSON.stringify({ eventNumber: selectedEvent }),
       });
       setIpadControlActive(Boolean(control.active));
+      setIpadBluetoothConnected(Boolean(control.connected));
       if (!control.active) throw new Error("iOS mouse kontrolü aktif hale gelemedi");
+
+      setStatus("4/4 iPad Bluetooth eşleştirme modu açılıyor...");
+      const pairing = await requestJson("/bluetooth/pairing/start", { method: "POST" });
+      setBluetoothPairingActive(Boolean(pairing.active));
       setStatus(
-        "iOS kontrolü hazır. Mouse pc'ye geri alma: Sol Ctrl + K."
+        "Bluetooth HID hazır. iPad'de Ayarlar → Bluetooth → CommunicatePars cihazına dokunun. Mouse'u geri alma: Sol Ctrl + K."
       );
     } catch (error) {
       console.error(error);
@@ -229,6 +261,7 @@ function App() {
         const controlStatus = await requestJson("/ipad/control/status");
         controlReallyActive = Boolean(controlStatus.active);
         setIpadControlActive(controlReallyActive);
+        setIpadBluetoothConnected(Boolean(controlStatus.connected));
       } catch (statusError) {
         console.error("Kontrol durumu doğrulanamadı:", statusError);
       }
@@ -239,6 +272,7 @@ function App() {
         );
       } else {
         setIpadControlActive(false);
+        setIpadBluetoothConnected(false);
         // Kontrol kesin olarak kapalıysa, yalnızca bu denemede açılan AirPlay'i kapat.
         if (airplayStartedByThisAttempt) {
           try {
@@ -271,6 +305,7 @@ function App() {
         method: "POST",
       });
       setIpadControlActive(false);
+      setIpadBluetoothConnected(false);
 
       // Mouse geri dönüşü başarıyla yanıtlandıktan sonra AirPlay kapatılır.
       setStatus("2/2 Mouse geri alındı; AirPlay kapatılıyor...");
@@ -305,12 +340,17 @@ function App() {
       setInputListLoading(true);
       setStatus("Mouse ve klavye aygıtları taranıyor...");
       const data = await requestJson("/ipad/input/list");
+      const devices = data.devices || [];
+      setInputDeviceOptions(devices);
       setInputDevices(
         data.output || "Kullanılabilir input aygıtı bulunamadı."
       );
-      setStatus(
-        "Input aygıtları listelendi. Mouse satırındaki event numarasını seç."
-      );
+      const selectedDevice = findSelectedInputDevice(devices, inputEvent.trim());
+      if (selectedDevice && isSelectableInput(selectedDevice)) {
+        setStatus(`Seçiminiz korundu: event${selectedDevice.eventNumber} — ${selectedDevice.name}`);
+      } else {
+        setStatus("Aygıtlar listelendi. Otomatik seçim yapılmadı; '+' işaretli mouse'u menüden siz seçin.");
+      }
     } catch (error) {
       console.error(error);
       setInputDevices("Input aygıtları listelenirken hata oluştu.");
@@ -322,18 +362,32 @@ function App() {
 
   const startIpadControl = async () => {
     try {
+      let selectedEvent = inputEvent.trim();
+      const inputData = await requestJson("/ipad/input/list");
+      const devices = inputData.devices || [];
+      setInputDeviceOptions(devices);
+      setInputDevices(inputData.output || "");
+      const selectedDevice = findSelectedInputDevice(devices, selectedEvent);
+      if (!selectedDevice) throw new Error(`Seçtiğiniz event${selectedEvent || "?"} bulunamadı; menüden mouse'u seçin.`);
+      if (!isSelectableInput(selectedDevice)) {
+        throw new Error(selectedDevice.touchpad
+          ? `Seçtiğiniz event${selectedEvent} bir touchpad; touchpad desteklenmez.`
+          : `Seçtiğiniz event${selectedEvent} kullanılamaz; '+' işaretli mouse'u seçin.`);
+      }
       setStatus("iOS kontrol sistemi başlatılıyor...");
       const data = await requestJson("/ipad/control/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventNumber: inputEvent }),
+        body: JSON.stringify({ eventNumber: selectedEvent }),
       });
 
       setIpadControlActive(Boolean(data.active));
+      setIpadBluetoothConnected(Boolean(data.connected));
       setStatus(data.message);
     } catch (error) {
       console.error(error);
       setIpadControlActive(false);
+      setIpadBluetoothConnected(false);
       setStatus(error.message);
     }
   };
@@ -354,6 +408,7 @@ function App() {
   };
 
   const refreshSharePanel = async () => {
+    setShareRefreshing(true);
     try {
       const [network, files] = await Promise.all([
         requestJson("/network/hotspot/status"),
@@ -365,6 +420,8 @@ function App() {
     } catch (error) {
       console.error("Paylaşım durumu alınamadı:", error);
       setStatus(error.message);
+    } finally {
+      setShareRefreshing(false);
     }
   };
   const openSharePanel = () => {
@@ -414,6 +471,29 @@ function App() {
       await refreshSharePanel();
     } catch (error) {
       setStatus(error.message);
+    } finally {
+      setShareBusy(false);
+    }
+  };
+  const downloadSharedFile = async (file) => {
+    if (shareBusy) return;
+    setShareBusy(true);
+    try {
+      if (window.communicatePars?.saveSharedFile) {
+        const data = await window.communicatePars.saveSharedFile(file);
+        if (!data?.success) throw new Error(data?.message || "Dosya indirilemedi");
+        if (!data.canceled) setStatus(data.message || `${file.name} kaydedildi`);
+      } else {
+        const link = document.createElement("a");
+        link.href = `${API_URL}${file.downloadUrl}`;
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+    } catch (error) {
+      console.error("Dosya indirme hatası:", error);
+      setStatus(error.message || "Dosya indirilemedi");
     } finally {
       setShareBusy(false);
     }
@@ -665,7 +745,11 @@ function App() {
                   {airplayActive ? "AirPlay Açık" : "AirPlay Kapalı"}
                 </span>
                 <span className={ipadControlActive ? "status-badge success" : "status-badge"}>
-                  {ipadControlActive ? "Kontrol Açık" : "Kontrol Kapalı"}
+                  {ipadBluetoothConnected
+                    ? "iPad Bluetooth Bağlı"
+                    : ipadControlActive
+                      ? "iPad Bağlantısı Bekleniyor"
+                      : "Kontrol Kapalı"}
                 </span>
                 <span className={bluetoothPairingActive ? "status-badge success" : "status-badge"}>
                   {bluetoothPairingActive ? "Yeni Eşleştirme Açık" : "Yeni Eşleştirme Kapalı"}
@@ -705,7 +789,10 @@ function App() {
                 }}
               >
                 <li style={{ color: "#0f172a", opacity: 1 }}>
-                  iPhone veya iPad ile Pardus bilgisayarı
+                  Pardus Bilgisayarınız x11 Masaüstü ortamında çalışıyor olmalıdır. (Wayland işaretçi kontrolü desteklenmez).
+                </li>
+                <li style={{ color: "#0f172a", opacity: 1 }}>
+                  Ekran yansıtma için iPhone veya iPad ile Pardus bilgisayarı
                   <strong style={{ color: "#0f172a" }}> aynı Wi-Fi ağına </strong>
                   bağlı olmalıdır.
                 </li>
@@ -724,7 +811,7 @@ function App() {
                   visibility: "visible",
                 }}
               >
-                Sistemi Kapatıp Mouse'u Pardus'a geri almak için: Sol Ctrl + K (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
+                Sistemi kapatıp seçili mouse'u Pardus'a geri almak için Sol Ctrl+ K kullanın. Mouse Kilitli Olduğu İçin Yönetici Parolarını Enter Tuşuyla Onaylayın.
               </p>
             </div>
             <div className="ipad-content">
@@ -733,7 +820,7 @@ function App() {
                 <div className="form-area">
                   <h3>iOS Kontrolü İçin Önce Mouse aygıtını seç</h3>
                   <p>
-                   iOS Kontrolü İçin Listeden kullandığın mouse’u (mouse modeli) bul ve başındaki event numarasını aşağıdaki kutucukta seç. 
+                   iOS Kontrolü İçin Listeden kullandığın mouse’u (mouse modeli) bul ve başındaki event numarasını aşağıdaki kutucukta seç. (touchpad desteklenmez)
                   </p>
                   <button
                     className="input-list-button"
@@ -746,22 +833,49 @@ function App() {
                     <div className="input-device-panel">
                       <div className="input-device-title">
                         Kullanılabilir input aygıtları
-                        <small>Mouse satırının başındaki event numarasını kullan.</small>
+                        <small>+ seçilebilir, - seçilemez. Touchpad desteklenmez.</small>
                       </div>
                       <pre>{inputDevices}</pre>
                     </div>
                   )}
                   <div className="event-input">
-                    <span>event</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="99"
-                      value={inputEvent}
-                      disabled={ipadControlActive || iosSessionBusy}
-                      onChange={(event) => setInputEvent(event.target.value)}
-                    />
+                    {inputDeviceOptions.length > 0 ? (
+                      <select
+                        value={inputDeviceOptions.some(
+                          (device) => String(device.eventNumber) === inputEvent && isSelectableInput(device)
+                        ) ? inputEvent : ""}
+                        disabled={ipadControlActive || iosSessionBusy}
+                        onChange={(event) => setInputEvent(event.target.value)}
+                        aria-label="Mouse input aygıtı"
+                      >
+                        <option value="" disabled>Mouse event aygıtını seçin</option>
+                        {inputDeviceOptions.map((device) => (
+                          <option
+                            key={device.eventNumber}
+                            value={device.eventNumber}
+                            disabled={!isSelectableInput(device)}
+                          >
+                            {isSelectableInput(device) ? "+" : "-"} event{device.eventNumber} — {device.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <>
+                        <span>event</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="9999"
+                          value={inputEvent}
+                          placeholder="otomatik"
+                          disabled={ipadControlActive || iosSessionBusy}
+                          onChange={(event) => setInputEvent(event.target.value)}
+                        />
+                      </>
+                    )}
                   </div>
+                  <p className="input-device-note">
+                  </p>
                 </div>
               </article>
 
@@ -776,7 +890,7 @@ function App() {
     lineHeight: 1.6,
   }}
 >
-  <strong style={{ color: "#fbbf24" }}>
+ <strong style={{ color: "#fbbf24" }}>
     Önemli Uyarı:
   </strong>{" "}
   Sol CTRL + K yapıp çıkarken şifre ekranında mouse çalışmayacağından
@@ -804,7 +918,8 @@ function App() {
                   <li>iOS Ayarlar → Erişilebilirlik → Dokunma bölümünden AssistiveTouch açılır.</li>
                   <li>Mouse kontrolü olmadan sadece ekranı görmek istediğinizde kontrol geldikten sonra sol ctrl + k yapın</li>
                   <li>Eğer Fare Yavaşsa AssistiveTouch ayarlarından işaretçi hızı ayarlanabilir</li>
-                  
+                  <li>Touchpad desteklenmez</li>
+
                 </ol>
                 
               </aside>
@@ -847,15 +962,15 @@ function App() {
                     opacity: 1,
                   }}
                 >
-                  Tablet veya telefonu ek monitör olarak kullanın. Bilgisayarınızı
-                  uzaktan kontrol edin veya kalem destekli cihazınızla çizim yapın.
+                  Mevcut ekranı veya seçtiğiniz pencereyi tablete aktarın; dokunma,
+                  kalem ve mouse hareketleriyle Pardus'u uzaktan kontrol edin.
                 </p>
               </div>
               <span
                 className={tabletActive ? "status-badge success" : "status-badge"}
                 style={{ flexShrink: 0 }}
               >
-                {tabletActive ? "Weylus Açık" : "Weylus Kapalı"}
+                {tabletActive ? "Ekran Açık" : "Ekran Kapalı"}
               </span>
             </div>
 
@@ -865,7 +980,8 @@ function App() {
                 <div className="form-area">
                   <h3>İkinci Ekranı Tek Tuşla Başlat</h3>
                   <p>
-                    
+                    Başlat'a basın, “Ekran Açık” yazısını bekleyin ve aşağıda
+                    oluşan adresi iPad'de Safari ile açın.
                   </p>
                   <button
                     className={tabletActive ? "control-toggle active" : "control-toggle"}
@@ -878,25 +994,39 @@ function App() {
                         ? "Kapat"
                         : "Başlat"}
                   </button>
+                  {tabletActive && tabletUrls.length > 0 && (
+                    <div className="input-device-panel" style={{ marginTop: "18px" }}>
+                      <strong>iPad'de Safari ile aç:</strong>
+                      {tabletUrls.map((url) => (
+                        <div key={url} style={{ marginTop: "10px", overflowWrap: "anywhere" }}>
+                          <a href={url} target="_blank" rel="noreferrer">{url}</a>{" "}
+                          <button
+                            type="button"
+                            className="small"
+                            onClick={() => copyText(url, "Weylus adresi")}
+                          >
+                            Kopyala
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </article>
 
              
 
-              <aside className="ipad-help">
+          <aside className="ipad-help">
                 <h3>Kullanım Koşulları</h3>
                 <ol>
                  <li style={{ marginBottom: "50px" }}>
   Tablet ve Pardus aynı ağda olmalıdır.
 </li>
-                  <li>Bilgisayarınızı uzaktan kontrol edip veya kalem destekli cihazınızla çizim yapabilisiniz.</li>
-                  <li>Başlat Tuşuna Basınca Çıkan Pencerede Varsa VAAPI NVENC Ayarları Etkin Olsun.</li>
-                  <li>Çıkan Pencerede Direkt Start Tuşuna Basın Ve Çıkan QR Kodu İkinci Cihazdan Okutun.</li>
-                  <li>Okumazsa Pencerede Çıkan Adresi Tarayıcıya Yazıpta Çalıştırabilirsiniz.</li>
-                  <li>Gözükecek Ekran vs Gibi Ayarları Cihaz Bağlanınca Cihaz Üzerindeki Menüden Ayarlayabilirsiniz.</li>
-                  <li>
-                    Linux uinput izinleri etkinse basınç ve eğim bilgileri aktarılır.
-                  </li>
+                  <li><strong>Başlat</strong> düğmesine basıp “Ekran Açık” durumunu bekleyin.</li>
+                  <li>Gösterilen web adresini ikinci cihazın web tarayıcısı ile açın.</li>
+                  <li>Mevcut ekranı veya seçtiğiniz pencereyi tablete aktarabilirsiniz. </li>
+                  <li>Dokunmatik olarak veya Tablet Kalemi, Stylus hareketleriyle Pardus'u uzaktan kontrol edebilirsiniz.</li>
+                  <li>İkinci monitör olarak kullanabilirsiniz.</li>
                 </ol>
               </aside>
             </div>
@@ -915,9 +1045,6 @@ function App() {
                 <span className={hotspotActive ? "status-badge success" : "status-badge"}>
                   {hotspotActive ? "Pardus Ağı Açık" : "Pardus Ağı Kapalı"}
                 </span>
-                <button className="small" onClick={refreshSharePanel} disabled={shareBusy}>
-                  Yenile
-                </button>
               </div>
             </div>
 
@@ -1154,20 +1281,25 @@ fontWeight: 800,
               </article>
 
               <aside className="ipad-help">
-                <div>
-  <h3 style={{ margin: 0 }}>
-    Paylaşılan dosyalar
-  </h3>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+  <div>
+    <h3 style={{ margin: 0 }}>
+      Gelen dosyalar
+    </h3>
 
-  <p
-    style={{
-      margin: "8px 0 0",
-      color: "#cbd5e1",
-      fontSize: "14px",
-    }}
-  >
-    Dosya Görünmüyorsa Yenile Düğmesine Basın.
-  </p>
+    <p
+      style={{
+        margin: "8px 0 0",
+        color: "#cbd5e1",
+        fontSize: "14px",
+      }}
+    >
+      Dosya Görünmüyorsa Yenile Tuşuna Basın.
+    </p>
+  </div>
+  <button className="small" onClick={refreshSharePanel} disabled={shareBusy || shareRefreshing}>
+    {shareRefreshing ? "Yenileniyor..." : "Yenile"}
+  </button>
 </div>
                 
                 {sharedFiles.length === 0 ? (
@@ -1192,13 +1324,14 @@ fontWeight: 800,
                       <br />
                       <small>{formatBytes(file.size)}</small>
                       <div className="control-buttons" style={{ marginTop: "8px" }}>
-                        <a
-                          href={`${API_URL}${file.downloadUrl}`}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          className="small"
+                          type="button"
+                          onClick={() => downloadSharedFile(file)}
+                          disabled={shareBusy}
                         >
                           İndir
-                        </a>
+                        </button>
                         <button
                           className="small"
                           onClick={() => removeSharedFile(file.id)}
@@ -1338,7 +1471,9 @@ iOS bağlantısını tamamla
                     </h3>
                     <p style={{ margin: 0, color: "#d5d9e8", lineHeight: 1.7 }}>
                       iPhone veya iPad'de Ayarlar → Bluetooth bölümünü aç.
-                      pardus (cihaz adınız) cihazını bul ve bağlan.
+                      <strong>CommunicatePars</strong> cihazını bul ve bağlan.
+                      Daha önce başarısız eşleştirme yaptıysan önce cihazın yanındaki
+                      bilgi düğmesinden “Bu Aygıtı Unut” seçeneğini kullan.
                     </p>
                   </div>
                 </section>
@@ -1382,7 +1517,7 @@ iOS bağlantısını tamamla
                   Sistemi Kapatıp Mouse'u PC'ye geri almak için
                 </strong>
                 <span style={{ fontSize: "18px" }}>
-                  Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas. (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)
+                  Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas. Parola pencerelerini de klavyeyle onayla: 3 saniye sonra mouse aygıtı donanımsal olarak yeniden bağlanır.
                 
                 </span>
               </div>

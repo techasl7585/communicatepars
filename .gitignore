@@ -1,0 +1,6 @@
+desktop/node_modules/
+desktop/dist/
+server/node_modules/
+logs/
+*.log
+*.pid

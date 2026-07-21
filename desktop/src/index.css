@@ -1,9 +1,9 @@
 :root {
   --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
+  --text-h: #f8fafc;
+--bg: #0f172a;
   --border: #e5e4e7;
-  --code-bg: #f4f3ec;
+  --code-bg: #020617;
   --accent: #aa3bff;
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
@@ -17,7 +17,7 @@
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: dark;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -108,4 +108,9 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+.app code {
+  background: #020617;
+  color: #f8fafc;
+  border: 1px solid #334155;
 }

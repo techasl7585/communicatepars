@@ -1,11 +1,11 @@
 const express = require("express");
 const cors = require("cors");
-const { exec, spawn } = require("child_process");
+const { exec, execFile, spawn } = require("child_process");
 const fs = require("fs");
+const net = require("net");
 const os = require("os");
 const path = require("path");
 const multer = require("multer");
-const { GlobalKeyboardListener } = require("node-global-key-listener");
 
 const app = express();
 const PORT = Number(process.env.PORT || 5050);
@@ -53,9 +53,14 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE, files: 20 },
 });
 
-const HIDCLIENT_PATH =
-  "/home/aslpardus/Projeler/communicatepars/tools/hidclient/hidclient";
-const X11_DISPLAY = process.env.DISPLAY || ":1";
+const PROJECT_DIR = path.resolve(__dirname, "..");
+const HIDCLIENT_PATH = process.env.COMMUNICATEPARS_HIDCLIENT ||
+  path.join(PROJECT_DIR, "tools", "hidclient", "hidclient");
+const SYSTEMCTL_PATH = process.env.COMMUNICATEPARS_SYSTEMCTL || "/usr/bin/systemctl";
+const BLUETOOTHCTL_PATH = process.env.COMMUNICATEPARS_BLUETOOTHCTL || "/usr/bin/bluetoothctl";
+const XINPUT_PATH = process.env.COMMUNICATEPARS_XINPUT || "/usr/bin/xinput";
+const INPUT_SYSFS_ROOT = process.env.COMMUNICATEPARS_INPUT_SYSFS_ROOT || "/sys";
+const X11_DISPLAY = process.env.DISPLAY || ":0";
 
 function resolveX11Authority() {
   if (process.env.XAUTHORITY && fs.existsSync(process.env.XAUTHORITY)) {
@@ -94,8 +99,13 @@ let weylusProcess = null;
 let bluetoothAgentProcess = null;
 let bluetoothPairingTimer = null;
 let activeEventNumber = null;
-let ctrlPressed = false;
-const keyboard = new GlobalKeyboardListener();
+let lastInputEventNumber = "8";
+let hidclientReady = false;
+let hidclientConnected = false;
+let hidclientPeerAddress = "";
+let hidclientLastError = "";
+let weylusReady = false;
+let weylusLastError = "";
 
 app.use(cors());
 app.use(express.json());
@@ -346,10 +356,12 @@ function stopBluetoothPairingMode() {
   bluetoothAgentProcess = null;
   if (!agent || agent.exitCode !== null) return;
   try {
-    // Yalnızca yeni cihaz eşleştirme görünürlüğünü kapatır.
-    // hidclient ve mouse geri yükleme akışına dokunmaz.
-    agent.stdin.write("discoverable off\n");
-    agent.stdin.write("pairable off\n");
+    // HID çalışırken bilgisayar çevre birimi olarak bağlanabilir kalmalıdır.
+    // Yalnızca HID kapalıysa görünürlük/eşleştirme de kapatılır.
+    if (!hidclientReady) {
+      agent.stdin.write("discoverable off\n");
+      agent.stdin.write("pairable off\n");
+    }
     agent.stdin.write("quit\n");
     agent.stdin.end();
   } catch (error) {
@@ -364,56 +376,20 @@ function stopBluetoothPairingMode() {
 
 
 
-function disconnectBluetoothDevice(callback = () => {}) {
-  exec(
-    "bluetoothctl devices Connected",
-    (error, stdout) => {
-      if (error) {
-        callback(error);
-        return;
-      }
+function disconnectBluetoothDevice(address, callback = () => {}) {
+  if (!/^[0-9A-F]{2}(?::[0-9A-F]{2}){5}$/i.test(address || "")) {
+    callback(null, "Etkin iPad Bluetooth adresi yok");
+    return;
+  }
 
-      const devices = stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
-
-      if (devices.length === 0) {
-        callback(null, "Bağlı bluetooth cihazı yok");
-        return;
-      }
-
-      let pending = devices.length;
-
-      devices.forEach((line) => {
-        const match = line.match(
-          /Device\s+([0-9A-F]{2}(?::[0-9A-F]{2}){5})/i
-        );
-
-        if (!match) {
-          pending--;
-
-          if (pending === 0) {
-            callback(null, "Bluetooth bağlantıları temizlendi");
-          }
-
-          return;
-        }
-
-        const mac = match[1];
-
-        exec(`bluetoothctl disconnect ${mac}`, () => {
-          console.log(`Bluetooth bağlantısı kesildi: ${mac}`);
-
-          pending--;
-
-          if (pending === 0) {
-            callback(null, "Bluetooth bağlantıları temizlendi");
-          }
-        });
-      });
+  execFile(BLUETOOTHCTL_PATH, ["disconnect", address], (error, stdout, stderr) => {
+    if (error) {
+      callback(new Error(stderr.trim() || error.message));
+      return;
     }
-  );
+    console.log(`iPad Bluetooth bağlantısı kesildi: ${address}`);
+    callback(null, stdout.trim() || "iPad Bluetooth bağlantısı sonlandırıldı");
+  });
 }
 
 
@@ -427,64 +403,129 @@ app.post("/bluetooth/pairing/start", (req, res) => {
   if (bluetoothAgentProcess && bluetoothAgentProcess.exitCode === null) {
     return res.json({ success: true, active: true, message: "Yeni iOS eşleştirme modu zaten açık" });
   }
-  exec("command -v bluetoothctl", (lookupError, stdout) => {
-    if (lookupError || !stdout.trim()) {
-      return res.status(503).json({ success: false, active: false, message: "bluetoothctl bulunamadı. Pardus'ta BlueZ paketini kur." });
+  // --agent ile agent kaydını bluetoothctl başlatırken yap. Eski akışta
+  // "agent" ve "default-agent" komutları peş peşe gönderiliyor, agent kaydı
+  // henüz tamamlanmadığı için "No agent is registered" oluşuyordu. Sonuçta
+  // masaüstünün DisplayYesNo agent'ı kullanılıyor ve iOS onayı yanıtsız kalıyordu.
+  const child = spawn(BLUETOOTHCTL_PATH, ["--agent", "NoInputNoOutput"], {
+    stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, LC_ALL: "C", LANG: "C" },
+  });
+  bluetoothAgentProcess = child;
+
+  let answered = false;
+  let output = "";
+  let defaultAgentRequested = false;
+  let discoverabilityRequested = false;
+  let promptBuffer = "";
+  let readinessTimer = null;
+
+  const send = (command) => {
+    if (child.exitCode !== null || child.stdin.destroyed) return false;
+    child.stdin.write(`${command}\n`);
+    return true;
+  };
+
+  const closeChild = () => {
+    try {
+      send("quit");
+      child.stdin.end();
+    } catch (_) {
+      try { child.kill("SIGTERM"); } catch (_) {}
     }
-    const bluetoothctlPath = stdout.trim().split("\n")[0];
-    const child = spawn(bluetoothctlPath, ["--agent", "NoInputNoOutput"], {
-      stdio: ["pipe", "pipe", "pipe"],
+  };
+
+  const fail = (message) => {
+    if (readinessTimer) clearTimeout(readinessTimer);
+    if (bluetoothAgentProcess === child) bluetoothAgentProcess = null;
+    closeChild();
+    if (!answered && !res.headersSent) {
+      answered = true;
+      return res.status(500).json({ success: false, active: false, message });
+    }
+  };
+
+  const finishReady = () => {
+    if (answered || res.headersSent || child.exitCode !== null) return;
+    if (readinessTimer) clearTimeout(readinessTimer);
+    answered = true;
+    bluetoothPairingTimer = setTimeout(stopBluetoothPairingMode, 180000);
+    bluetoothPairingTimer.unref();
+    return res.json({
+      success: true,
+      active: true,
+      message: "Yeni iOS eşleştirmesi açık. iPad Bluetooth menüsünden CommunicatePars cihazına bağlan.",
+      output: output.trim(),
     });
-    bluetoothAgentProcess = child;
-    let answered = false;
-    let output = "";
-    const fail = (message) => {
-      if (bluetoothAgentProcess === child) bluetoothAgentProcess = null;
-      if (!answered && !res.headersSent) {
-        answered = true;
-        return res.status(500).json({ success: false, active: false, message });
-      }
-    };
-    child.stdout.on("data", (data) => {
-      const text = data.toString();
-      output += text;
-      if (text.trim()) console.log(`[bluetoothctl] ${text.trim()}`);
-    });
-    child.stderr.on("data", (data) => {
-      const text = data.toString().trim();
-      if (text) console.error(`[bluetoothctl hata] ${text}`);
-    });
-    child.once("error", (error) => fail(`Bluetooth eşleştirme modu açılamadı: ${error.message}`));
-    child.once("close", (code) => {
-      console.log(`Bluetooth eşleştirme agent kapandı. Kod: ${code}`);
-      if (bluetoothAgentProcess === child) bluetoothAgentProcess = null;
-    });
-    child.once("spawn", () => {
-      try {
-        child.stdin.write("power on\n");
-        child.stdin.write("agent NoInputNoOutput\n");
-        child.stdin.write("default-agent\n");
-        child.stdin.write("pairable on\n");
-        child.stdin.write("discoverable-timeout 180\n");
-        child.stdin.write("discoverable on\n");
-      } catch (error) {
-        fail(`Bluetooth komutları gönderilemedi: ${error.message}`);
-        return;
-      }
-      setTimeout(() => {
-        if (answered || res.headersSent) return;
-        if (child.exitCode !== null) return fail("Bluetooth eşleştirme agent kapandı");
-        answered = true;
-        return res.json({
-          success: true,
-          active: true,
-          message: "Yeni iOS eşleştirmesi açık. Bluetooth menüsünden pardus (pc adınız) cihazına  bağlan.",
-          output: output.trim(),
-        });
-      }, 900);
-      bluetoothPairingTimer = setTimeout(stopBluetoothPairingMode, 180000);
-      bluetoothPairingTimer.unref();
-    });
+  };
+
+  child.stdout.on("data", (data) => {
+    const text = data.toString();
+    output += text;
+    promptBuffer = `${promptBuffer}${text}`.slice(-512);
+    if (text.trim()) console.log(`[bluetoothctl] ${text.trim()}`);
+
+    if (/Failed to register agent object|No agent is registered/i.test(output)) {
+      fail("Bluetooth eşleştirme agent'ı varsayılan olarak kaydedilemedi");
+      return;
+    }
+
+    // Agent kaydı tamamlandıktan sonra varsayılan yap; bu sıra IO yeteneğinin
+    // gerçekten NoInputNoOutput olarak BlueZ'e iletilmesini sağlar.
+    if (!defaultAgentRequested && /Agent registered/i.test(output)) {
+      defaultAgentRequested = true;
+      send("default-agent");
+    }
+
+    if (!discoverabilityRequested && /Default agent request successful/i.test(output)) {
+      discoverabilityRequested = true;
+      send("pairable on");
+      send("discoverable-timeout 0");
+      send("discoverable on");
+    }
+
+    // Bazı BlueZ sürümleri NoInputNoOutput seçimine rağmen metin tabanlı onay
+    // sorabiliyor. Yalnızca kullanıcının açtığı üç dakikalık eşleştirme
+    // penceresinde bu iOS eşleştirme/servis onayını otomatik kabul et.
+    const promptMatch = promptBuffer.match(/(?:Confirm passkey|Authorize service|Request authorization)[\s\S]{0,160}\(yes\/no\):/i);
+    if (promptMatch) {
+      promptBuffer = "";
+      console.log("[bluetoothctl] iOS eşleştirme onayı otomatik kabul edildi");
+      send("yes");
+    }
+
+    if (discoverabilityRequested && /Changing discoverable on succeeded/i.test(output)) {
+      finishReady();
+    }
+  });
+
+  child.stderr.on("data", (data) => {
+    const text = data.toString().trim();
+    if (text) console.error(`[bluetoothctl hata] ${text}`);
+  });
+
+  child.once("error", (error) => {
+    const missing = error.code === "ENOENT"
+      ? "bluetoothctl bulunamadı. Pardus'ta BlueZ paketini kur."
+      : `Bluetooth eşleştirme modu açılamadı: ${error.message}`;
+    fail(missing);
+  });
+
+  child.once("close", (code) => {
+    console.log(`Bluetooth eşleştirme agent kapandı. Kod: ${code}`);
+    if (bluetoothAgentProcess === child) bluetoothAgentProcess = null;
+    if (!answered) fail("Bluetooth eşleştirme agent'ı hazır olmadan kapandı");
+  });
+
+  child.once("spawn", () => {
+    send("power on");
+    send("system-alias CommunicatePars");
+    readinessTimer = setTimeout(() => {
+      if (answered || res.headersSent) return;
+      console.error(`[bluetoothctl] Agent hazırlama zaman aşımı. Çıktı: ${output.trim()}`);
+      fail("Bluetooth NoInputNoOutput agent'ı hazırlanamadı; server.log dosyasını kontrol edin");
+    }, 8000);
+    readinessTimer.unref();
   });
 });
 
@@ -498,216 +539,548 @@ app.get("/bluetooth/pairing/status", (req, res) => {
   return res.json({ success: true, active });
 });
 
+function readInputDevices() {
+  const inputRoot = path.join(INPUT_SYSFS_ROOT, "class", "input");
+  const devices = fs.readdirSync(inputRoot)
+    .filter((entry) => /^event\d+$/.test(entry))
+    .map((entry) => {
+      const deviceRoot = path.join(inputRoot, entry, "device");
+      const readValue = (relativePath) => {
+        try {
+          return fs.readFileSync(path.join(deviceRoot, relativePath), "utf8").trim();
+        } catch (_) {
+          return "";
+        }
+      };
+      const name = readValue("name") || "Adsız input aygıtı";
+      const relativeBits = readValue("capabilities/rel");
+      const hasRelativeAxes = relativeBits
+        .split(/\s+/)
+        .some((word) => word && !/^0+$/.test(word));
+      const touchpad = /touch[ -]?pad|track[ -]?pad|clickpad/i.test(name);
+      const selectable = hasRelativeAxes && !touchpad;
+      const reason = touchpad
+        ? "Touchpad desteklenmiyor"
+        : selectable
+          ? "Seçilebilir mouse/işaretçi"
+          : "Relative mouse aygıtı değil";
+      return {
+        eventNumber: entry.slice("event".length),
+        name,
+        relative: hasRelativeAxes,
+        touchpad,
+        selectable,
+        reason,
+      };
+    })
+    .sort((a, b) => Number(a.eventNumber) - Number(b.eventNumber));
+
+  const lines = ["İşaret  event  Aygıt (+ seçilebilir / - seçilemez)"];
+  for (const device of devices) {
+    lines.push(
+      `${device.selectable ? "+" : "-"}       ${device.eventNumber.padStart(2, " ")}  '${device.name}' — ${device.reason}`
+    );
+  }
+  return { devices, output: lines.join("\n") };
+}
+
 app.get("/ipad/input/list", (req, res) => {
-  const args = [
-    "/usr/bin/env",
-    `DISPLAY=${X11_DISPLAY}`,
-    `XAUTHORITY=${X11_AUTHORITY}`,
-    HIDCLIENT_PATH,
-    "-l",
-  ];
-
-  const child = spawn("pkexec", args, {
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  let stdout = "";
-  let stderr = "";
-
-  child.stdout.on("data", (data) => {
-    stdout += data.toString();
-  });
-
-  child.stderr.on("data", (data) => {
-    stderr += data.toString();
-  });
-
-  child.on("error", (error) => {
+  try {
+    const { devices, output } = readInputDevices();
+    return res.json({ success: true, output, devices });
+  } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Input aygıtları listelenemedi",
       error: error.message,
     });
-  });
-
-  child.on("close", (code) => {
-    if (res.headersSent) return;
-
-    if (code !== 0) {
-      return res.status(500).json({
-        success: false,
-        message: "Input aygıtları listelenemedi",
-        error: `hidclient -l hata kodu: ${code}`,
-        stderr,
-      });
-    }
-
-    return res.json({ success: true, output: stdout });
-  });
+  }
 });
 
 app.post("/ipad/control/start", (req, res) => {
-  const eventNumber = String(req.body.eventNumber || "").trim();
+  const eventNumber = String(req.body.eventNumber ?? "").trim();
 
-  if (!/^[0-9]{1,2}$/.test(eventNumber)) {
+  if (!/^[0-9]{1,4}$/.test(eventNumber)) {
     return res.status(400).json({
       success: false,
       active: false,
-      message: "Geçerli bir event numarası gir",
+      message: "Menüden kullanmak istediğiniz mouse event aygıtını seçin",
+    });
+  }
+
+  let selectedDevice;
+  try {
+    selectedDevice = readInputDevices().devices.find(
+      (device) => device.eventNumber === eventNumber
+    );
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      active: false,
+      message: "Input aygıtları doğrulanamadı",
+      error: error.message,
+    });
+  }
+
+  if (!selectedDevice) {
+    return res.status(400).json({
+      success: false,
+      active: false,
+      message: `event${eventNumber} bu bilgisayarda bulunamadı; Aygıtları Göster ile yeniden seçin.`,
+    });
+  }
+
+  if (!selectedDevice.selectable) {
+    return res.status(400).json({
+      success: false,
+      active: false,
+      message: selectedDevice.touchpad
+        ? `event${eventNumber} bir touchpad; touchpad desteklenmiyor. Harici mouse seçin.`
+        : `event${eventNumber} seçilebilir bir mouse aygıtı değil. '+' işaretli bir aygıt seçin.`,
     });
   }
 
   if (hidclientProcess && hidclientProcess.exitCode === null) {
-    return res.json({
-      success: true,
-      active: true,
-      message: "iPad kontrol sistemi zaten çalışıyor",
+    return res.status(hidclientReady ? 200 : 409).json({
+      success: hidclientReady,
+      active: hidclientReady,
+      ready: hidclientReady,
+      connected: hidclientConnected,
+      message: hidclientReady
+        ? "iPad kontrol sistemi zaten çalışıyor"
+        : "iPad kontrol sistemi başlatılıyor; parola penceresini tamamlayın.",
+    });
+  }
+
+  if (!fs.existsSync(HIDCLIENT_PATH)) {
+    return res.status(503).json({
+      success: false,
+      active: false,
+      message: "hidclient bulunamadı",
+      error: `Beklenen dosya: ${HIDCLIENT_PATH}`,
     });
   }
 
   activeEventNumber = eventNumber;
+  lastInputEventNumber = eventNumber;
+  hidclientReady = false;
+  hidclientConnected = false;
+  hidclientPeerAddress = "";
+  hidclientLastError = "";
 
-  hidclientProcess = spawn(
+  // Kurulum bluetoothd'yi --compat ve gerekli eklenti ayarlarıyla önceden
+  // hazırlar. hidclient SDP kaydını çalışan bluetoothd'ye ekler. Bu kayıttan
+  // sonra bluetoothd yeniden başlatılırsa HID kaydı silineceği için burada
+  // servis kesinlikle yeniden başlatılmaz.
+  const startScript = `
+set -u
+HIDCLIENT="$1"
+EVENT_NUMBER="$2"
+DISPLAY_VALUE="$3"
+XAUTHORITY_VALUE="$4"
+SYSTEMCTL="$5"
+BLUETOOTHCTL="$6"
+
+if ! "$SYSTEMCTL" is-active --quiet bluetooth.service; then
+  "$SYSTEMCTL" start bluetooth.service || {
+    printf 'Bluetooth servisi başlatılamadı. Önce ./install-pardus.sh çalıştırın.\n' >&2
+    exit 20
+  }
+fi
+
+"$BLUETOOTHCTL" power on >/dev/null || {
+  printf 'Bluetooth adaptörü açılamadı.\n' >&2
+  exit 21
+}
+"$BLUETOOTHCTL" system-alias CommunicatePars >/dev/null 2>&1 || true
+
+# BlueZ adaptörü açarken sınıf bilgisini kısa bir gecikmeyle yayınlayabilir.
+BLUETOOTH_CLASS=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  BLUETOOTH_CLASS=$("$BLUETOOTHCTL" show 2>/dev/null | /usr/bin/awk '/Class:/ {print $2; exit}')
+  if [[ "$BLUETOOTH_CLASS" =~ ^0x[0-9A-Fa-f]+$ ]] &&
+     (( (BLUETOOTH_CLASS & 0x1FFC) == 0x05C0 )); then
+    break
+  fi
+  /usr/bin/sleep 0.2
+done
+
+if ! [[ "$BLUETOOTH_CLASS" =~ ^0x[0-9A-Fa-f]+$ ]] ||
+   (( (BLUETOOTH_CLASS & 0x1FFC) != 0x05C0 )); then
+  [ -n "$BLUETOOTH_CLASS" ] || BLUETOOTH_CLASS="okunamadı"
+  printf 'Bluetooth sınıfı çevre birimi değil (mevcut: %s). ./install-pardus.sh komutunu yeniden çalıştırın.\n' "$BLUETOOTH_CLASS" >&2
+  exit 24
+fi
+
+/usr/bin/stdbuf -oL -eL /usr/bin/env \
+  DISPLAY="$DISPLAY_VALUE" \
+  XAUTHORITY="$XAUTHORITY_VALUE" \
+  "$HIDCLIENT" "-e$EVENT_NUMBER" -x </dev/null &
+HID_PID=$!
+
+/usr/bin/sleep 2
+if ! /bin/kill -0 "$HID_PID" 2>/dev/null; then
+  wait "$HID_PID"
+  exit $?
+fi
+
+# SDP kaydı yapıldıktan sonra iPad'in aramasını aç. Agent hemen ardından
+# /bluetooth/pairing/start endpoint'i tarafından başlatılır.
+"$BLUETOOTHCTL" pairable on >/dev/null || {
+  printf 'Bluetooth eşleştirme modu açılamadı.\n' >&2
+  /bin/kill -INT "$HID_PID" 2>/dev/null || true
+  wait "$HID_PID" 2>/dev/null || true
+  exit 22
+}
+"$BLUETOOTHCTL" discoverable-timeout 0 >/dev/null 2>&1 || true
+"$BLUETOOTHCTL" discoverable on >/dev/null || {
+  printf 'Bluetooth çevre birimi görünür yapılamadı.\n' >&2
+  /bin/kill -INT "$HID_PID" 2>/dev/null || true
+  wait "$HID_PID" 2>/dev/null || true
+  exit 23
+}
+
+if ! /bin/kill -0 "$HID_PID" 2>/dev/null; then
+  wait "$HID_PID"
+  exit $?
+fi
+
+printf 'COMMUNICATEPARS_HID_READY\\n'
+
+while /bin/kill -0 "$HID_PID" 2>/dev/null; do
+  if IFS= read -r -t 1 CONTROL_COMMAND; then
+    if [ "$CONTROL_COMMAND" = "STOP" ]; then
+      /bin/kill -INT "$HID_PID" 2>/dev/null || true
+      for _ in 1 2 3 4 5 6; do
+        /bin/kill -0 "$HID_PID" 2>/dev/null || break
+        /usr/bin/sleep 0.5
+      done
+      /bin/kill -KILL "$HID_PID" 2>/dev/null || true
+      break
+    fi
+  else
+    /usr/bin/sleep 0.1
+  fi
+done
+
+wait "$HID_PID" 2>/dev/null
+HID_STATUS=$?
+exit "$HID_STATUS"
+`;
+
+  const child = spawn(
     "pkexec",
     [
-      "/usr/bin/env",
-      `DISPLAY=${X11_DISPLAY}`,
-      `XAUTHORITY=${X11_AUTHORITY}`,
+      "/bin/bash",
+      "-c",
+      startScript,
+      "communicatepars-hid",
       HIDCLIENT_PATH,
-      `-e${eventNumber}`,
-      "-x",
+      eventNumber,
+      X11_DISPLAY,
+      X11_AUTHORITY,
+      SYSTEMCTL_PATH,
+      BLUETOOTHCTL_PATH,
     ],
-    { stdio: ["ignore", "pipe", "pipe"] }
+    { stdio: ["pipe", "pipe", "pipe"] }
   );
+  hidclientProcess = child;
 
-  hidclientProcess.stdout.on("data", (data) => {
-    const message = data.toString().trim();
+  let startupOutput = "";
+  let startupError = "";
+  let answered = false;
+
+  const answerFailure = (message, status = 500) => {
+    if (answered || res.headersSent) return;
+    answered = true;
+    clearTimeout(startupTimer);
+    return res.status(status).json({
+      success: false,
+      active: false,
+      ready: false,
+      connected: false,
+      message,
+      error: hidclientLastError || startupError.trim() || startupOutput.trim(),
+    });
+  };
+
+  const startupTimer = setTimeout(() => {
+    hidclientLastError = "HID başlatma zaman aşımına uğradı. Parola penceresini ve Bluetooth servisini kontrol edin.";
+    try { child.kill("SIGTERM"); } catch (_) {}
+    answerFailure(hidclientLastError, 504);
+  }, 60000);
+  startupTimer.unref();
+
+  child.stdout.on("data", (data) => {
+    const text = data.toString();
+    startupOutput = (startupOutput + text).slice(-12000);
+    const message = text.trim();
     if (message) console.log(`[hidclient] ${message}`);
+
+    const peerMatch = startupOutput.match(
+      /Incoming connection from node \[([0-9A-F]{2}(?::[0-9A-F]{2}){5})\] accepted and established/i
+    );
+    if (peerMatch) {
+      hidclientConnected = true;
+      hidclientPeerAddress = peerMatch[1];
+    }
+
+    if (text.includes("COMMUNICATEPARS_HID_READY") && !answered) {
+      answered = true;
+      clearTimeout(startupTimer);
+      hidclientReady = true;
+      hidclientLastError = "";
+      return res.json({
+        success: true,
+        active: true,
+        ready: true,
+        connected: hidclientConnected,
+        message: "Bluetooth HID hazır. iPad Bluetooth ayarlarından CommunicatePars cihazına bağlanın.",
+      });
+    }
   });
 
-  hidclientProcess.stderr.on("data", (data) => {
-    const message = data.toString().trim();
-    if (message) console.error(`[hidclient hata] ${message}`);
+  child.stderr.on("data", (data) => {
+    const text = data.toString();
+    startupError = (startupError + text).slice(-12000);
+    hidclientLastError = text.trim() || hidclientLastError;
+    if (text.trim()) console.error(`[hidclient hata] ${text.trim()}`);
   });
 
-  hidclientProcess.on("error", (error) => {
-    console.error("hidclient başlatma hatası:", error.message);
-    hidclientProcess = null;
+  child.on("error", (error) => {
+    hidclientLastError = error.message;
+    if (hidclientProcess === child) hidclientProcess = null;
+    hidclientReady = false;
+    hidclientConnected = false;
+    hidclientPeerAddress = "";
     activeEventNumber = null;
+    answerFailure(`hidclient başlatılamadı: ${error.message}`);
   });
 
-  hidclientProcess.on("close", (code) => {
+  child.on("close", (code) => {
     console.log(`hidclient kapandı. Kod: ${code}`);
-    hidclientProcess = null;
-  });
-
-  return res.json({
-    success: true,
-    active: true,
-    message:
-      "Kontrol sistemi hazır. Şimdi iPad Bluetooth ayarlarından pardus (pc adınız) cihazına bağlan.",
+    clearTimeout(startupTimer);
+    if (hidclientProcess === child) hidclientProcess = null;
+    const wasReady = hidclientReady;
+    hidclientReady = false;
+    hidclientConnected = false;
+    activeEventNumber = null;
+    if (!wasReady) {
+      answerFailure(
+        code === 126
+          ? "Yetkilendirme iptal edildi; iPad kontrolü başlatılmadı."
+          : `iPad kontrolü başlatılamadı (hidclient kodu: ${code}).`
+      );
+    }
   });
 });
 
-function stopHidclient() {
-  exec("pkexec /usr/bin/pkill -9 -x hidclient");
+function forceStopHidclient(callback) {
+  const stopScript = `
+set -u
+HIDCLIENT=$(/usr/bin/readlink -f "$1")
+PIDS=()
 
-  if (hidclientProcess) {
-    try {
-      hidclientProcess.kill("SIGKILL");
-    } catch (_) {
-      // Süreç zaten kapandıysa devam et.
-    }
-  }
+for PROC_DIR in /proc/[0-9]*; do
+  PROC_EXE=$(/usr/bin/readlink -f "$PROC_DIR/exe" 2>/dev/null || true)
+  if [ "$PROC_EXE" = "$HIDCLIENT" ]; then
+    PIDS+=("\${PROC_DIR##*/}")
+  fi
+done
 
-  hidclientProcess = null;
+# Kullanıcı iOS kapatmayı seçtiğinde yumuşak sinyal bekleme: bu paketteki
+# hidclient süreçlerini pkill -9 eşdeğeri SIGKILL ile doğrudan kes.
+if [ "\${#PIDS[@]}" -gt 0 ]; then
+  /bin/kill -KILL "\${PIDS[@]}" 2>/dev/null || true
+  /usr/bin/sleep 0.1
+fi
+exit 0
+`;
+
+  const cleanup = spawn(
+    "pkexec",
+    ["/bin/bash", "-c", stopScript, "communicatepars-hid-stop", HIDCLIENT_PATH],
+    { stdio: ["ignore", "pipe", "pipe"] }
+  );
+  let stderr = "";
+  let finished = false;
+  const finish = (error = null) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(authTimer);
+    callback(error);
+  };
+  const authTimer = setTimeout(() => {
+    try { cleanup.kill("SIGTERM"); } catch (_) {}
+    finish(new Error("Yetkili HID kapatma işlemi zaman aşımına uğradı"));
+  }, 60000);
+  authTimer.unref();
+  cleanup.stderr.on("data", (data) => { stderr = (stderr + data.toString()).slice(-4000); });
+  cleanup.once("error", (error) => finish(error));
+  cleanup.once("close", (code) => {
+    if (code === 0) return finish();
+    finish(new Error(stderr.trim() || `Yetkili HID kapatma kodu: ${code}`));
+  });
 }
 
-function restoreMouse(eventNumber, callback) {
-  if (!eventNumber) {
-    callback(null, "Event numarası yok; yalnızca hidclient kapatıldı.");
-    return;
+function restoreXInputEvent(eventNumber, callback) {
+  if (!/^\d{1,4}$/.test(String(eventNumber || ""))) return callback();
+
+  const restoreScript = `
+set -u
+XINPUT="$1"
+EVENT_NUMBER="$2"
+[ -x "$XINPUT" ] || exit 0
+
+MASTER_ID=$("$XINPUT" list --id-only "Virtual core pointer" 2>/dev/null | /usr/bin/head -n 1)
+[ -n "$MASTER_ID" ] || exit 0
+
+while IFS= read -r DEVICE_ID; do
+  [[ "$DEVICE_ID" =~ ^[0-9]+$ ]] || continue
+  if "$XINPUT" list-props "$DEVICE_ID" 2>/dev/null | /bin/grep -Fq "/dev/input/event$EVENT_NUMBER"; then
+    "$XINPUT" enable "$DEVICE_ID" >/dev/null 2>&1 || true
+    "$XINPUT" reattach "$DEVICE_ID" "$MASTER_ID" >/dev/null 2>&1 || true
+  fi
+done < <("$XINPUT" list --id-only 2>/dev/null)
+exit 0
+`;
+
+  execFile(
+    "/bin/bash",
+    ["-c", restoreScript, "communicatepars-xinput-restore", XINPUT_PATH, String(eventNumber)],
+    { env: { ...process.env, DISPLAY: X11_DISPLAY, XAUTHORITY: X11_AUTHORITY } },
+    (error) => callback(error || null)
+  );
+}
+
+function restoreMouseHardware(eventNumber, callback) {
+  if (!/^\d{1,4}$/.test(String(eventNumber || ""))) {
+    return callback(new Error("Mouse geri yükleme için seçili event numarası geçersiz"));
   }
 
-  const script = `
-EVENT_PATH=$(readlink -f /sys/class/input/event${eventNumber}/device 2>/dev/null)
+  // Eski çalışan sürümdeki ikinci yetkili işlem: seçilen event aygıtının
+  // gerçek USB üst aygıtını bul, sürücüden ayır ve yeniden bağla. USB olmayan
+  // aygıtlarda udev + XInput geri yükleme yolu kullanılır.
+  const restoreScript = `
+set -u
+EVENT_NUMBER="$1"
+SYS_ROOT="$2"
+EVENT_LINK="$SYS_ROOT/class/input/event$EVENT_NUMBER/device"
+EVENT_PATH=$(/usr/bin/readlink -f "$EVENT_LINK" 2>/dev/null || true)
+
+udev_fallback() {
+  /usr/bin/udevadm trigger --action=add --subsystem-match=input 2>/dev/null || true
+  /usr/bin/udevadm settle 2>/dev/null || true
+  printf 'event%s için udev geri yükleme tetiklendi\n' "$EVENT_NUMBER"
+}
+
 if [ -z "$EVENT_PATH" ]; then
-  udevadm trigger --action=add --subsystem-match=input
-  echo "Event yolu bulunamadı; udev tetiklendi."
+  udev_fallback
   exit 0
 fi
 
 CURRENT="$EVENT_PATH"
 USB_DEVICE=""
-
 while [ "$CURRENT" != "/" ]; do
   if [ -f "$CURRENT/idVendor" ] && [ -f "$CURRENT/idProduct" ]; then
-    USB_DEVICE=$(basename "$CURRENT")
+    USB_DEVICE=$(/usr/bin/basename "$CURRENT")
     break
   fi
-  CURRENT=$(dirname "$CURRENT")
+  CURRENT=$(/usr/bin/dirname "$CURRENT")
 done
 
-if [ -n "$USB_DEVICE" ] && [ -e "/sys/bus/usb/drivers/usb/$USB_DEVICE" ]; then
-  echo "$USB_DEVICE" > /sys/bus/usb/drivers/usb/unbind
-  sleep 1
-  echo "$USB_DEVICE" > /sys/bus/usb/drivers/usb/bind
-  echo "USB mouse yeniden bağlandı: $USB_DEVICE"
-else
-  udevadm trigger --action=add --subsystem-match=input
-  echo "USB aygıtı bulunamadı; udev tetiklendi."
+DRIVER_ROOT="$SYS_ROOT/bus/usb/drivers/usb"
+if [ -z "$USB_DEVICE" ] || [ ! -e "$DRIVER_ROOT/$USB_DEVICE" ]; then
+  udev_fallback
+  exit 0
 fi
+
+UNBOUND=0
+rebind_on_exit() {
+  if [ "$UNBOUND" -eq 1 ]; then
+    printf '%s' "$USB_DEVICE" > "$DRIVER_ROOT/bind" 2>/dev/null || true
+  fi
+}
+trap rebind_on_exit EXIT
+
+printf '%s' "$USB_DEVICE" > "$DRIVER_ROOT/unbind" || {
+  printf 'USB mouse sürücüden ayrılamadı: %s\n' "$USB_DEVICE" >&2
+  exit 31
+}
+UNBOUND=1
+/usr/bin/sleep 1
+printf '%s' "$USB_DEVICE" > "$DRIVER_ROOT/bind" || {
+  printf 'USB mouse sürücüye yeniden bağlanamadı: %s\n' "$USB_DEVICE" >&2
+  exit 32
+}
+UNBOUND=0
+trap - EXIT
+/usr/bin/udevadm settle 2>/dev/null || true
+printf 'event%s USB aygıtı yeniden bağlandı: %s\n' "$EVENT_NUMBER" "$USB_DEVICE"
+exit 0
 `;
 
-  const child = spawn("pkexec", ["/bin/bash", "-c", script], {
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
+  const restore = spawn(
+    "pkexec",
+    [
+      "/bin/bash",
+      "-c",
+      restoreScript,
+      "communicatepars-mouse-restore",
+      String(eventNumber),
+      INPUT_SYSFS_ROOT,
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] }
+  );
   let stdout = "";
   let stderr = "";
-
-  child.stdout.on("data", (data) => {
-    stdout += data.toString();
-  });
-
-  child.stderr.on("data", (data) => {
-    stderr += data.toString();
-  });
-
-  child.on("close", (code) => {
-    if (code !== 0) {
-      callback(new Error(stderr || `Mouse geri yükleme hata kodu: ${code}`));
-      return;
-    }
-    callback(null, stdout.trim() || "Mouse Pardus'a geri verildi.");
+  let finished = false;
+  const finish = (error = null) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(authTimer);
+    callback(error, stdout.trim());
+  };
+  const authTimer = setTimeout(() => {
+    try { restore.kill("SIGTERM"); } catch (_) {}
+    finish(new Error("Yetkili USB mouse geri bağlama işlemi zaman aşımına uğradı"));
+  }, 60000);
+  authTimer.unref();
+  restore.stdout.on("data", (data) => { stdout = (stdout + data.toString()).slice(-4000); });
+  restore.stderr.on("data", (data) => { stderr = (stderr + data.toString()).slice(-4000); });
+  restore.once("error", (error) => finish(error));
+  restore.once("close", (code) => {
+    if (code === 0) return finish();
+    finish(new Error(stderr.trim() || `Yetkili USB mouse geri bağlama kodu: ${code}`));
   });
 }
 
-function stopIpadControlFromShortcut() {
-  console.log("CTRL + K ile iPad kontrolü kapatılıyor");
+function stopHidclient(eventNumber, callback = () => {}) {
+  const child = hidclientProcess;
+  hidclientProcess = null;
+  hidclientReady = false;
+  hidclientConnected = false;
 
-  const eventNumber = activeEventNumber;
-  activeEventNumber = null;
+  let finished = false;
+  const finish = (error = null) => {
+    if (finished) return;
+    finished = true;
+    restoreXInputEvent(eventNumber, (restoreError) => callback(error || restoreError || null));
+  };
 
-  stopHidclient();
-
-  restoreMouse(eventNumber, (error, output) => {
-    if (error) {
-      console.error("Mouse geri yükleme hatası:", error.message);
-      return;
+  console.warn("[Ctrl+K] Yetkili doğrudan HID kapatma (SIGKILL) başlatılıyor.");
+  forceStopHidclient((error) => {
+    // SIGKILL sonrasında yetkili sarmalayıcıyı da kapat. Ardından eski çalışan
+    // sürümdeki ikinci pkexec ile seçilen event'in USB aygıtını unbind/bind yap.
+    if (child && child.exitCode === null) {
+      try { child.stdin.end(); } catch (_) {}
+      try { child.kill("SIGTERM"); } catch (_) {}
     }
-
-    console.log(output);
-
-    disconnectBluetoothDevice((disconnectError) => {
-      if (disconnectError) {
-        console.error(
-          "Bluetooth bağlantısı kesilemedi:",
-          disconnectError.message
-        );
-      } else {
-        console.log("Bluetooth bağlantısı sonlandırıldı.");
-      }
+    if (error) return finish(error);
+    console.warn(`[Ctrl+K] event${eventNumber} için yetkili USB geri bağlama başlatılıyor.`);
+    restoreMouseHardware(eventNumber, (restoreError, output) => {
+      if (output) console.log(`[mouse geri yükleme] ${output}`);
+      finish(restoreError);
     });
   });
 }
@@ -715,25 +1088,27 @@ function stopIpadControlFromShortcut() {
 app.post("/ipad/control/stop", (req, res) => {
   console.log("STOP endpoint çağrıldı");
 
-  const eventNumber = activeEventNumber;
+  const eventNumber = activeEventNumber || lastInputEventNumber;
   activeEventNumber = null;
+  const peerAddress = hidclientPeerAddress;
+  hidclientPeerAddress = "";
 
-  stopHidclient();
-
-  restoreMouse(eventNumber, (error, output) => {
+  stopHidclient(eventNumber, (error) => {
     if (error) {
       return res.status(500).json({
         success: false,
         active: false,
-        message: "hidclient kapatıldı ancak mouse geri yüklenemedi",
+        message: "iPad kontrolü kapatılırken mouse geri yüklenemedi",
         error: error.message,
       });
     }
 
-    disconnectBluetoothDevice((disconnectError) => {
+    stopBluetoothPairingMode();
+
+    disconnectBluetoothDevice(peerAddress, (disconnectError) => {
       if (disconnectError) {
         console.error(
-          "Bluetooth bağlantısı kesilemedi:",
+          "iPad Bluetooth bağlantısı kesilemedi:",
           disconnectError.message
         );
       }
@@ -741,9 +1116,8 @@ app.post("/ipad/control/stop", (req, res) => {
       return res.json({
         success: true,
         active: false,
-        message:
-          (output || "Mouse Pardus'a geri verildi.") +
-          " Bluetooth bağlantısı sonlandırıldı.",
+        eventNumber,
+        message: `iPad kontrolü kapatıldı; event${eventNumber} mouse Pardus'a geri verildi.`,
       });
     });
   });
@@ -751,8 +1125,15 @@ app.post("/ipad/control/stop", (req, res) => {
 
 app.get("/ipad/control/status", (req, res) => {
   const active =
-    hidclientProcess !== null && hidclientProcess.exitCode === null;
-  return res.json({ success: true, active });
+    hidclientReady && hidclientProcess !== null && hidclientProcess.exitCode === null;
+  return res.json({
+    success: true,
+    active,
+    ready: active,
+    connected: active && hidclientConnected,
+    eventNumber: activeEventNumber || lastInputEventNumber,
+    error: active ? "" : hidclientLastError,
+  });
 });
 
 
@@ -1040,48 +1421,160 @@ app.get("/system/batteries", (_req, res) => {
 
 function getTabletUrls(port = 1701) {
   const urls = [];
-  for (const addresses of Object.values(os.networkInterfaces())) {
+  const ignoredInterface = /^(lo|docker|br-|veth|virbr|tun|tap|tailscale)/i;
+  let interfaces;
+  try {
+    interfaces = os.networkInterfaces();
+  } catch (error) {
+    console.error(`Yerel ağ adresleri okunamadı: ${error.message}`);
+    return urls;
+  }
+  for (const [interfaceName, addresses] of Object.entries(interfaces)) {
+    if (ignoredInterface.test(interfaceName)) continue;
     for (const address of addresses || []) {
       if (address.family === "IPv4" && !address.internal) urls.push(`http://${address.address}:${port}`);
     }
   }
   return [...new Set(urls)];
 }
+
+function waitForTcpPort(port, timeoutMs, callback) {
+  const startedAt = Date.now();
+  const tryConnect = () => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    let finished = false;
+    const finishAttempt = (ready) => {
+      if (finished) return;
+      finished = true;
+      socket.destroy();
+      if (ready) return callback(null);
+      if (Date.now() - startedAt >= timeoutMs) {
+        return callback(new Error(`${port} numaralı port zamanında açılmadı`));
+      }
+      setTimeout(tryConnect, 300);
+    };
+    socket.setTimeout(800);
+    socket.once("connect", () => finishAttempt(true));
+    socket.once("error", () => finishAttempt(false));
+    socket.once("timeout", () => finishAttempt(false));
+  };
+  tryConnect();
+}
+
 function resolveWeylusCommand(callback) {
   exec("command -v weylus", (nativeError, nativeStdout) => {
-    if (!nativeError && nativeStdout.trim()) return callback(null, { command: nativeStdout.trim().split("\n")[0], args: [], source: "native" });
+    if (!nativeError && nativeStdout.trim()) {
+      return callback(null, {
+        command: nativeStdout.trim().split("\n")[0],
+        args: ["--no-gui"],
+        source: "native",
+      });
+    }
     exec("command -v flatpak", (flatpakError, flatpakStdout) => {
       if (flatpakError || !flatpakStdout.trim()) return callback(new Error("Weylus bulunamadı. Weylus veya Flatpak sürümünü kur."));
       exec("flatpak info io.github.electronstudio.WeylusCommunityEdition", (infoError) => {
         if (infoError) return callback(new Error("Weylus bulunamadı. Weylus Community Edition Flatpak paketini kur."));
-        callback(null, { command: flatpakStdout.trim().split("\n")[0], args: ["run", "io.github.electronstudio.WeylusCommunityEdition"], source: "flatpak" });
+        callback(null, {
+          command: flatpakStdout.trim().split("\n")[0],
+          args: ["run", "io.github.electronstudio.WeylusCommunityEdition", "--no-gui"],
+          source: "flatpak",
+        });
       });
     });
   });
 }
 app.post("/tablet/start", (_req, res) => {
-  if (weylusProcess && weylusProcess.exitCode === null) return res.json({ success: true, active: true, urls: getTabletUrls(), message: "İkinci Ekran servisi zaten çalışıyor." });
+  if (weylusProcess && weylusProcess.exitCode === null) {
+    return res.status(weylusReady ? 200 : 409).json({
+      success: weylusReady,
+      active: weylusReady,
+      urls: getTabletUrls(),
+      message: weylusReady
+        ? "İkinci Ekran servisi zaten çalışıyor."
+        : "Weylus başlatılıyor; lütfen bekleyin.",
+    });
+  }
   resolveWeylusCommand((lookupError, launcher) => {
     if (lookupError) return res.status(503).json({ success: false, active: false, message: lookupError.message });
-    const child = spawn(launcher.command, launcher.args, { env: { ...process.env, DISPLAY: X11_DISPLAY, XAUTHORITY: X11_AUTHORITY }, stdio: ["ignore", "pipe", "pipe"] });
+    weylusReady = false;
+    weylusLastError = "";
+    const child = spawn(launcher.command, launcher.args, {
+      env: {
+        ...process.env,
+        DISPLAY: X11_DISPLAY,
+        XAUTHORITY: X11_AUTHORITY,
+        WEYLUS_LOG_LEVEL: "INFO",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     weylusProcess = child;
     let answered = false;
-    child.stdout.on("data", data => { const message=data.toString().trim(); if(message) console.log(`[weylus] ${message}`); });
-    child.stderr.on("data", data => { const message=data.toString().trim(); if(message) console.error(`[weylus hata] ${message}`); });
+    let output = "";
+    let stderr = "";
+    child.stdout.on("data", data => {
+      const message = data.toString();
+      output = (output + message).slice(-12000);
+      if (message.trim()) console.log(`[weylus] ${message.trim()}`);
+    });
+    child.stderr.on("data", data => {
+      const message = data.toString();
+      stderr = (stderr + message).slice(-12000);
+      weylusLastError = message.trim() || weylusLastError;
+      if (message.trim()) console.error(`[weylus hata] ${message.trim()}`);
+    });
     child.once("spawn", () => {
-      if (answered || res.headersSent) return;
-      answered = true;
-      res.status(202).json({ success: true, active: true, urls: getTabletUrls(), source: launcher.source, message: "Weylus açıldı. Weylus penceresinde Start düğmesine bas, ardından tablette gösterilen adresi aç." });
+      waitForTcpPort(1701, 25000, (readyError) => {
+        if (answered || res.headersSent) return;
+        if (readyError) {
+          answered = true;
+          weylusLastError = stderr.trim() || output.trim() || readyError.message;
+          try { child.kill("SIGTERM"); } catch (_) {}
+          return res.status(504).json({
+            success: false,
+            active: false,
+            message: "Weylus web sunucusu başlatılamadı.",
+            error: weylusLastError,
+          });
+        }
+        answered = true;
+        weylusReady = true;
+        const urls = getTabletUrls();
+        return res.status(202).json({
+          success: true,
+          active: true,
+          urls,
+          source: launcher.source,
+          message: urls.length
+            ? `Weylus hazır. iPad Safari'de şu adresi açın: ${urls[0]}`
+            : "Weylus hazır; ancak yerel ağ adresi bulunamadı.",
+        });
+      });
     });
     child.once("error", error => {
       if (weylusProcess === child) weylusProcess = null;
+      weylusReady = false;
+      weylusLastError = error.message;
       if (!answered && !res.headersSent) { answered=true; res.status(500).json({ success:false, active:false, message:`İkinci Ekran servisi başlatılamadı: ${error.message}` }); }
     });
-    child.once("close", code => { console.log(`Weylus kapandı. Kod: ${code}`); if (weylusProcess === child) weylusProcess=null; });
+    child.once("close", code => {
+      console.log(`Weylus kapandı. Kod: ${code}`);
+      if (weylusProcess === child) weylusProcess = null;
+      weylusReady = false;
+      if (!answered && !res.headersSent) {
+        answered = true;
+        weylusLastError = stderr.trim() || output.trim() || `Weylus kodu: ${code}`;
+        res.status(500).json({
+          success: false,
+          active: false,
+          message: "Weylus başlatılamadan kapandı.",
+          error: weylusLastError,
+        });
+      }
+    });
   });
 });
 app.post("/tablet/stop", (_req, res) => {
-  const child=weylusProcess; weylusProcess=null;
+  const child=weylusProcess; weylusProcess=null; weylusReady=false;
   if (!child || child.exitCode !== null) return res.json({ success:true, active:false, message:"İkinci Ekran servisi zaten kapalı." });
   try {
     child.kill("SIGTERM");
@@ -1090,8 +1583,8 @@ app.post("/tablet/stop", (_req, res) => {
   res.json({ success:true, active:false, message:"İkinci Ekran servisi kapatıldı." });
 });
 app.get("/tablet/status", (_req, res) => {
-  const active=weylusProcess!==null && weylusProcess.exitCode===null;
-  res.json({ success:true, active, urls:getTabletUrls() });
+  const active=weylusReady && weylusProcess!==null && weylusProcess.exitCode===null;
+  res.json({ success:true, active, urls:getTabletUrls(), error:active ? "" : weylusLastError });
 });
 
 app.get("/share/health", (req, res) => {
@@ -1159,27 +1652,13 @@ app.use((error, req, res, next) => {
   });
 });
 
-keyboard.addListener((event) => {
-  if (event.name === "LEFT CTRL" && event.state === "DOWN") {
-    ctrlPressed = true;
-  }
-
-  if (event.name === "LEFT CTRL" && event.state === "UP") {
-    ctrlPressed = false;
-  }
-
-  if (ctrlPressed && event.name === "K" && event.state === "DOWN") {
-    stopIpadControlFromShortcut();
-  }
-});
-
 const server = app.listen(PORT, HOST, () => {
   console.log(`CommunicatePars Local Server çalışıyor: http://${HOST}:${PORT}`);
   console.log(`Telefon için varsayılan hotspot adresi: http://10.42.0.1:${PORT}/share`);
   console.log(`Bağlantı testi: http://10.42.0.1:${PORT}/share/health`);
   console.log(`X11 ekranı: ${X11_DISPLAY}`);
   console.log(`X11 authority: ${X11_AUTHORITY}`);
-  console.log("Acil kapatma kısayolu: Sol Ctrl + K");
+  console.log("Acil kapatma kısayolu: Sol Ctrl + K (masaüstü uygulaması)");
 });
 
 server.on("error", (error) => {

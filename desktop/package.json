@@ -1,9 +1,10 @@
 {
   "name": "desktop",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.2.7",
   "type": "module",
   "scripts": {
+    "start": "NODE_ENV=production electron electron/main.cjs",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",

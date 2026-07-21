@@ -1,7 +1,11 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, globalShortcut, ipcMain, net, shell } = require("electron");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+
+// Wayland oturumlarında Electron genel kısayollarını masaüstü portalı
+// üzerinden kaydedebilsin. Bu anahtar app hazır olmadan önce verilmelidir.
+app.commandLine.appendSwitch("enable-features", "GlobalShortcutsPortal");
 
 const SHARE_DIR = process.env.COMMUNICATEPARS_SHARE_DIR ||
   path.join(os.homedir(), ".local", "share", "communicatepars", "uploads");
@@ -41,11 +45,67 @@ function createWindow() {
     },
   });
 
+  // target="_blank" bağlantıları için ikinci, boş bir Electron penceresi
+  // oluşturma. Web adreslerini sistemin varsayılan tarayıcısında aç.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+  // Global kısayol portalı kullanılamıyorsa, CommunicatePars penceresi odaktayken
+  // Ctrl+K yine de mouse geri alma isteğini çalıştırsın.
+  win.webContents.on("before-input-event", (event, input) => {
+    if (
+      input.type === "keyDown" &&
+      input.control &&
+      !input.alt &&
+      !input.meta &&
+      String(input.key || "").toLowerCase() === "k"
+    ) {
+      event.preventDefault();
+      void stopIpadControlFromShortcut();
+    }
+  });
+
   if (process.env.NODE_ENV === "development") {
     win.loadURL("http://127.0.0.1:5173");
     //win.webContents.openDevTools();                                       //developer konsol açma
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
+  }
+}
+
+let shortcutStopInFlight = false;
+
+async function stopIpadControlFromShortcut() {
+  if (shortcutStopInFlight) return;
+  shortcutStopInFlight = true;
+  try {
+    const response = await net.fetch("http://127.0.0.1:5050/ipad/control/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const message = await response.text();
+    console.log(`[Ctrl+K] iPad kontrolü durdurma: ${response.status} ${message}`);
+    if (!response.ok) {
+      void dialog.showMessageBox({
+        type: "error",
+        title: "Mouse geri alınamadı",
+        message: "Ctrl+K mouse'u geri alamadı",
+        detail: message,
+      });
+    }
+  } catch (error) {
+    console.error(`[Ctrl+K] iPad kontrolü durdurulamadı: ${error.message}`);
+    void dialog.showMessageBox({
+      type: "error",
+      title: "Mouse geri alınamadı",
+      message: "CommunicatePars sunucusuna ulaşılamadı",
+      detail: error.message,
+    });
+  } finally {
+    shortcutStopInFlight = false;
   }
 }
 
@@ -107,10 +167,21 @@ ipcMain.handle("share:save-file", async (event, file) => {
 });
 
 app.whenReady().then(() => {
+  const shortcutRegistered = globalShortcut.register("Control+K", () => {
+    void stopIpadControlFromShortcut();
+  });
+  if (!shortcutRegistered) {
+    console.warn("[uyarı] Sol Ctrl + K genel kısayolu kaydedilemedi.");
+  }
+
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {

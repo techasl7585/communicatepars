@@ -20,6 +20,11 @@ body,
   display: grid;
   grid-template-columns: 290px 1fr;
   background: #0f172a;
+  .app h1,
+.app h2,
+.app h3 {
+  color: #f8fafc;
+}
 }
 
 .sidebar {
@@ -329,9 +334,28 @@ button:active {
   font-weight: 800;
 }
 
-.event-input input {
+.event-input input,
+.event-input select {
   border: none;
   box-shadow: none;
+}
+
+.event-input:has(select) {
+  max-width: 100%;
+}
+
+.event-input select {
+  width: 100%;
+  padding: 11px 13px;
+  background: #1e293b;
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.input-device-note {
+  margin: 10px 0 0;
+  color: #fbbf24;
+  font-weight: 700;
 }
 
 
