@@ -54,7 +54,7 @@ uygulama menüsü, simge ve masaüstü kısayolu yeni sürüme göre güncelleni
 - Pardus/Debian tabanlı x86_64 bilgisayar
 - Node.js 20.19+, 22.12+ veya daha yeni sürüm
 - iPad kontrolü için çalışan Bluetooth adaptörü
-- Grafik masaüstü oturumu (X11 veya XWayland)
+- Grafik masaüstü oturumu X11 (İpad İşaretçi kontrolünün sorunsuz çalışması için)
 
 Paketteki `hidclient` x86_64 için derlenmiştir ve `libbluetooth.so.3` kullanır. Kurulum betiği gerekli `libbluetooth3` paketini yükler.
 
