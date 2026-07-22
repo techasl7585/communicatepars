@@ -2,7 +2,15 @@
 
 set -u
 
-PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+INSTALLED_DIR="$HOME/.local/opt/communicatepars"
+[ ! -d "$INSTALLED_DIR" ] || INSTALLED_DIR="$(cd -- "$INSTALLED_DIR" && pwd -P)"
+
+if [ "$PROJECT_DIR" != "$INSTALLED_DIR" ] &&
+   [ -x "$INSTALLED_DIR/start-communicatepars.sh" ]; then
+  exec "$INSTALLED_DIR/start-communicatepars.sh" "$@"
+fi
+
 SERVER_DIR="$PROJECT_DIR/server"
 DESKTOP_DIR="$PROJECT_DIR/desktop"
 LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/communicatepars"

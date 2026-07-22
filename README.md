@@ -1,6 +1,8 @@
-# CommunicatePars — Pardus kurulumu
+# CommunicatePars 1.3.2 — Pardus kurulumu
 
-Bu paket taşınabilir hâle getirilmiştir; klasörü kullanıcı adından veya konumundan bağımsız olarak çalıştırır.
+Kurulum paketi ilk çalıştırıldığı klasörü otomatik algılar. İndirilen klasörün
+adı veya dili önemli değildir; `İndirilenler`, `Downloads` ya da başka bir
+konumdan çalıştırılabilir.
 
 ## İlk kurulum
 
@@ -12,18 +14,40 @@ chmod +x install-pardus.sh start-communicatepars.sh check-system.sh
 ```
 
 Kurulum Weylus Community Edition, `/dev/uinput` izinleri ve Bluetooth HID
-uyumluluk ayarını da otomatik hazırlar. Tamamlandıktan sonra bir kez oturumu
-kapatıp açın (en güvenlisi bilgisayarı yeniden başlatmaktır), ardından kontrol edin:
+uyumluluk ayarını da otomatik hazırlar. Uygulama kullanıcının sabit kurulum
+dizinine kopyalanır:
 
-```bash
-./check-system.sh
+```text
+~/.local/opt/communicatepars
 ```
 
-`Sonuç: 0 hata` görülüyorsa uygulamayı açın:
+Kurulum ayrıca CommunicatePars'ı Pardus uygulamalar menüsüne ekler, simgesini
+kurar ve masaüstü klasörü etkinse masaüstü kısayolu oluşturur. Kurulum
+tamamlandıktan sonra indirilen ZIP ve çıkartılan kaynak klasörü silinebilir.
+
+Tamamlandıktan sonra bir kez oturumu kapatıp açın (en güvenlisi bilgisayarı
+yeniden başlatmaktır), ardından kontrol edin:
 
 ```bash
-./start-communicatepars.sh
+~/.local/opt/communicatepars/check-system.sh
 ```
+
+`Sonuç: 0 hata` görülüyorsa Pardus uygulamalar menüsünden **CommunicatePars**
+uygulamasını açın. Terminalden açmak gerekirse:
+
+```bash
+~/.local/bin/communicatepars
+```
+
+Eski çıkartılmış klasördeki `check-system.sh` veya `start-communicatepars.sh`
+komutları da kurulu kopyayı bulursa otomatik olarak sabit kurulum dizinine
+yönlenir.
+
+## Güncelleme
+
+Yeni sürümün ZIP dosyasını herhangi bir klasöre çıkartıp
+`./install-pardus.sh` komutunu yeniden çalıştırın. Sabit kurulum dizini,
+uygulama menüsü, simge ve masaüstü kısayolu yeni sürüme göre güncellenir.
 
 ## Gereksinimler
 

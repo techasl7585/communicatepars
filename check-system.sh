@@ -6,7 +6,15 @@ set -u
 # Kurulu iw/btmgmt gibi araçları yanlışlıkla eksik sayma.
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
-PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+INSTALLED_DIR="$HOME/.local/opt/communicatepars"
+[ ! -d "$INSTALLED_DIR" ] || INSTALLED_DIR="$(cd -- "$INSTALLED_DIR" && pwd -P)"
+
+if [ "$PROJECT_DIR" != "$INSTALLED_DIR" ] &&
+   [ -x "$INSTALLED_DIR/check-system.sh" ]; then
+  exec "$INSTALLED_DIR/check-system.sh" "$@"
+fi
+
 ERRORS=0
 WARNINGS=0
 
@@ -36,6 +44,33 @@ check_command() {
 printf '[CommunicatePars] Sistem kontrolü\n'
 printf 'Proje: %s\n' "$PROJECT_DIR"
 printf 'Mimari: %s\n' "$(uname -m)"
+
+if [ "$PROJECT_DIR" = "$INSTALLED_DIR" ]; then
+  ok "Uygulama sabit kullanıcı dizinine kurulu"
+else
+  error "Uygulama sabit kullanıcı dizinine kurulmamış; ./install-pardus.sh çalıştırın"
+fi
+
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+APP_LAUNCHER="$HOME/.local/bin/communicatepars"
+DESKTOP_ENTRY="$DATA_HOME/applications/communicatepars.desktop"
+APP_ICON="$DATA_HOME/icons/hicolor/256x256/apps/communicatepars.png"
+
+if [ -x "$APP_LAUNCHER" ]; then
+  ok "CommunicatePars komut başlatıcısı hazır"
+else
+  error "CommunicatePars komut başlatıcısı eksik"
+fi
+if [ -f "$DESKTOP_ENTRY" ]; then
+  ok "CommunicatePars uygulamalar menüsüne kayıtlı"
+else
+  error "CommunicatePars uygulama menüsü kaydı eksik"
+fi
+if [ -f "$APP_ICON" ]; then
+  ok "CommunicatePars uygulama simgesi kurulu"
+else
+  error "CommunicatePars uygulama simgesi eksik"
+fi
 
 if [ "$(uname -m)" = "x86_64" ]; then
   ok "hidclient mimarisi uyumlu (x86_64)"

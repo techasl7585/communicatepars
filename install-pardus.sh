@@ -7,7 +7,8 @@ set -Eeuo pipefail
 # sayılmaması için standart sistem yollarını baştan ekle.
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
-PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PROJECT_DIR="$SOURCE_DIR"
 
 info() {
   printf '\n[CommunicatePars] %s\n' "$1"
@@ -38,6 +39,14 @@ if [ "$(id -u)" -eq 0 ]; then
   fail "Kurulum betiğini sudo ile başlatmayın. Normal kullanıcı olarak ./install-pardus.sh çalıştırın; gerektiğinde parola kendiliğinden sorulur."
 fi
 
+TARGET_USER="$(id -un)"
+TARGET_HOME="$(getent passwd "$TARGET_USER" 2>/dev/null | cut -d: -f6)"
+[ -n "$TARGET_HOME" ] && [ -d "$TARGET_HOME" ] || TARGET_HOME="$HOME"
+TARGET_HOME="$(cd -- "$TARGET_HOME" && pwd -P)"
+INSTALL_DIR="$TARGET_HOME/.local/opt/communicatepars"
+mkdir -p "$INSTALL_DIR"
+INSTALL_DIR="$(cd -- "$INSTALL_DIR" && pwd -P)"
+
 info "Pardus/Debian sistem paketleri kontrol ediliyor"
 sudo apt-get update
 
@@ -64,16 +73,33 @@ required_packages=(
   network-manager
   pipewire
   rfkill
+  rsync
   upower
   uxplay
   wireplumber
   xinput
   x11-xserver-utils
+  desktop-file-utils
+  xdg-user-dirs
   xdg-desktop-portal
   xdg-desktop-portal-gtk
 )
 
 sudo apt-get install -y "${required_packages[@]}"
+
+if [ "$SOURCE_DIR" != "$INSTALL_DIR" ]; then
+  info "Uygulama sabit kullanıcı dizinine kuruluyor"
+  mkdir -p "$INSTALL_DIR"
+  rsync -a \
+    --exclude='.git' \
+    --exclude='server/node_modules/' \
+    --exclude='desktop/node_modules/' \
+    --exclude='desktop/dist/' \
+    --exclude='logs/' \
+    "$SOURCE_DIR/" "$INSTALL_DIR/"
+  PROJECT_DIR="$(cd -- "$INSTALL_DIR" && pwd -P)"
+  printf 'Kurulum dizini: %s\n' "$PROJECT_DIR"
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
   sudo systemctl enable --now NetworkManager.service ||
@@ -202,7 +228,6 @@ if ! command -v weylus >/dev/null 2>&1; then
 fi
 
 info "Weylus uinput izinleri hazırlanıyor"
-TARGET_USER="${SUDO_USER:-${USER:-$(id -un)}}"
 sudo groupadd --system --force uinput
 sudo usermod -aG uinput "$TARGET_USER"
 printf '%s\n' 'KERNEL=="uinput", MODE="0660", GROUP="uinput", OPTIONS+="static_node=uinput", TAG+="uaccess"' |
@@ -262,6 +287,7 @@ info "Masaüstü uygulaması derleniyor"
 chmod +x \
   "$PROJECT_DIR/start-communicatepars.sh" \
   "$PROJECT_DIR/check-system.sh" \
+  "$PROJECT_DIR/tools/install-user-launcher.sh" \
   "$PROJECT_DIR/tools/hidclient/hidclient"
 
 if command -v systemctl >/dev/null 2>&1; then
@@ -338,6 +364,9 @@ if command -v systemctl >/dev/null 2>&1; then
   bluetoothctl_retry discoverable on || fail "Bluetooth görünür yapılamadı."
 fi
 
+info "Uygulama menüsü ve masaüstü başlatıcısı hazırlanıyor"
+"$PROJECT_DIR/tools/install-user-launcher.sh" "$PROJECT_DIR" "$TARGET_HOME"
+
 info "Kurulum sonucu kontrol ediliyor"
 if ! "$PROJECT_DIR/check-system.sh"; then
   fail "Kurulum kontrolünde hata bulundu. Yukarıdaki HATA satırlarını inceleyin."
@@ -345,6 +374,7 @@ fi
 
 info "Kurulum tamamlandı"
 printf 'Uygulamayı aç: %s/start-communicatepars.sh\n' "$PROJECT_DIR"
+printf 'Uygulamalar menüsünde: CommunicatePars\n'
 
 if ! command -v uxplay >/dev/null 2>&1; then
   warning "UxPlay kurulu değil; iPad ekran yansıtma özelliği kullanılamaz."
