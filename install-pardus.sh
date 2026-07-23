@@ -68,7 +68,9 @@ required_packages=(
   iw
   zenity
   bluez
+  build-essential
   libbluetooth3
+  libbluetooth-dev
   libusb-1.0-0
   network-manager
   pipewire
@@ -274,6 +276,19 @@ if ! node_is_supported; then
 fi
 
 command -v npm >/dev/null 2>&1 || fail "npm kurulamadı."
+
+info "Bluetooth HID istemcisi iPhone dikey yön desteğiyle derleniyor"
+HIDCLIENT_SOURCE="$PROJECT_DIR/tools/hidclient/src/hidclient.c"
+HIDCLIENT_OUTPUT="$PROJECT_DIR/tools/hidclient/hidclient"
+[ -f "$HIDCLIENT_SOURCE" ] ||
+  fail "hidclient kaynak kodu bulunamadı: $HIDCLIENT_SOURCE"
+HIDCLIENT_BUILD="$(mktemp)"
+if ! gcc -O2 -Wall -o "$HIDCLIENT_BUILD" "$HIDCLIENT_SOURCE" -lbluetooth; then
+  rm -f -- "$HIDCLIENT_BUILD"
+  fail "hidclient derlenemedi. build-essential ve libbluetooth-dev kurulumunu kontrol edin."
+fi
+install -m 0755 "$HIDCLIENT_BUILD" "$HIDCLIENT_OUTPUT"
+rm -f -- "$HIDCLIENT_BUILD"
 
 info "Sunucu paketleri kuruluyor"
 (cd "$PROJECT_DIR/server" && npm ci)

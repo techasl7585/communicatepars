@@ -100,6 +100,8 @@ let bluetoothAgentProcess = null;
 let bluetoothPairingTimer = null;
 let activeEventNumber = null;
 let lastInputEventNumber = "8";
+let activePointerOrientation = null;
+let lastPointerOrientation = "landscape";
 let hidclientReady = false;
 let hidclientConnected = false;
 let hidclientPeerAddress = "";
@@ -599,12 +601,23 @@ app.get("/ipad/input/list", (req, res) => {
 
 app.post("/ipad/control/start", (req, res) => {
   const eventNumber = String(req.body.eventNumber ?? "").trim();
+  const pointerOrientation = String(
+    req.body.pointerOrientation || "landscape"
+  ).trim();
 
   if (!/^[0-9]{1,4}$/.test(eventNumber)) {
     return res.status(400).json({
       success: false,
       active: false,
       message: "Menüden kullanmak istediğiniz mouse event aygıtını seçin",
+    });
+  }
+
+  if (!["landscape", "portrait"].includes(pointerOrientation)) {
+    return res.status(400).json({
+      success: false,
+      active: false,
+      message: "Geçersiz ekran yönü. Yatay tablet veya dikey iPhone seçin.",
     });
   }
 
@@ -646,6 +659,7 @@ app.post("/ipad/control/start", (req, res) => {
       active: hidclientReady,
       ready: hidclientReady,
       connected: hidclientConnected,
+      pointerOrientation: activePointerOrientation || lastPointerOrientation,
       message: hidclientReady
         ? "iPad kontrol sistemi zaten çalışıyor"
         : "iPad kontrol sistemi başlatılıyor; parola penceresini tamamlayın.",
@@ -663,6 +677,8 @@ app.post("/ipad/control/start", (req, res) => {
 
   activeEventNumber = eventNumber;
   lastInputEventNumber = eventNumber;
+  activePointerOrientation = pointerOrientation;
+  lastPointerOrientation = pointerOrientation;
   hidclientReady = false;
   hidclientConnected = false;
   hidclientPeerAddress = "";
@@ -680,6 +696,7 @@ DISPLAY_VALUE="$3"
 XAUTHORITY_VALUE="$4"
 SYSTEMCTL="$5"
 BLUETOOTHCTL="$6"
+POINTER_ORIENTATION="$7"
 
 if ! "$SYSTEMCTL" is-active --quiet bluetooth.service; then
   "$SYSTEMCTL" start bluetooth.service || {
@@ -712,10 +729,15 @@ if ! [[ "$BLUETOOTH_CLASS" =~ ^0x[0-9A-Fa-f]+$ ]] ||
   exit 24
 fi
 
+HIDCLIENT_ARGS=("-e$EVENT_NUMBER" -x)
+if [ "$POINTER_ORIENTATION" = "portrait" ]; then
+  HIDCLIENT_ARGS+=(--rotate-cw)
+fi
+
 /usr/bin/stdbuf -oL -eL /usr/bin/env \
   DISPLAY="$DISPLAY_VALUE" \
   XAUTHORITY="$XAUTHORITY_VALUE" \
-  "$HIDCLIENT" "-e$EVENT_NUMBER" -x </dev/null &
+  "$HIDCLIENT" "\${HIDCLIENT_ARGS[@]}" </dev/null &
 HID_PID=$!
 
 /usr/bin/sleep 2
@@ -781,6 +803,7 @@ exit "$HID_STATUS"
       X11_AUTHORITY,
       SYSTEMCTL_PATH,
       BLUETOOTHCTL_PATH,
+      pointerOrientation,
     ],
     { stdio: ["pipe", "pipe", "pipe"] }
   );
@@ -835,6 +858,7 @@ exit "$HID_STATUS"
         active: true,
         ready: true,
         connected: hidclientConnected,
+        pointerOrientation,
         message: "Bluetooth HID hazır. iPad Bluetooth ayarlarından CommunicatePars cihazına bağlanın.",
       });
     }
@@ -854,6 +878,7 @@ exit "$HID_STATUS"
     hidclientConnected = false;
     hidclientPeerAddress = "";
     activeEventNumber = null;
+    activePointerOrientation = null;
     answerFailure(`hidclient başlatılamadı: ${error.message}`);
   });
 
@@ -865,6 +890,7 @@ exit "$HID_STATUS"
     hidclientReady = false;
     hidclientConnected = false;
     activeEventNumber = null;
+    activePointerOrientation = null;
     if (!wasReady) {
       answerFailure(
         code === 126
@@ -1132,6 +1158,7 @@ app.get("/ipad/control/status", (req, res) => {
     ready: active,
     connected: active && hidclientConnected,
     eventNumber: activeEventNumber || lastInputEventNumber,
+    pointerOrientation: activePointerOrientation || lastPointerOrientation,
     error: active ? "" : hidclientLastError,
   });
 });

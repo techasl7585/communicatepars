@@ -1,4 +1,4 @@
-# CommunicatePars 1.3.2 — Pardus kurulumu
+# CommunicatePars 1.3.5 — Pardus kurulumu
 
 Kurulum paketi ilk çalıştırıldığı klasörü otomatik algılar. İndirilen klasörün
 adı veya dili önemli değildir; `İndirilenler`, `Downloads` ya da başka bir
@@ -54,9 +54,12 @@ uygulama menüsü, simge ve masaüstü kısayolu yeni sürüme göre güncelleni
 - Pardus/Debian tabanlı x86_64 bilgisayar
 - Node.js 20.19+, 22.12+ veya daha yeni sürüm
 - iPad kontrolü için çalışan Bluetooth adaptörü
-- Grafik masaüstü oturumu X11 (İpad İşaretçi kontrolünün sorunsuz çalışması için)
+- Grafik masaüstü oturumu (X11 veya XWayland)
 
-Paketteki `hidclient` x86_64 için derlenmiştir ve `libbluetooth.so.3` kullanır. Kurulum betiği gerekli `libbluetooth3` paketini yükler.
+Kurulum betiği paketteki `hidclient` kaynak kodunu x86_64 için derler.
+`build-essential`, `libbluetooth-dev` ve çalışma sırasında gereken
+`libbluetooth3` paketleri otomatik kurulur; son kullanıcının ayrıca paket
+kurması gerekmez.
 
 ## iPad mouse kontrolü
 
@@ -68,11 +71,14 @@ Paketteki `hidclient` x86_64 için derlenmiştir ve `libbluetooth.so.3` kullanı
    bu seçim iOS kontrolüne gönderilir ve kapatırken aynı aygıt geri bağlanır;
    uygulama başka bir event'e kendiliğinden geçmez.
    **Touchpad desteklenmez**; harici USB veya Bluetooth mouse kullanın.
-2. **iOS Kontrolünü Başlat** düğmesine basın ve Pardus parola penceresini onaylayın.
-3. iPad'de **Ayarlar → Bluetooth → CommunicatePars** cihazına dokunun.
-4. Önceki sürümle başarısız eşleştirme varsa iPad'de cihazı **Bu Aygıtı Unut**
+2. Mouse yönü çalışan yatay ayarda sabitlenmiştir ve kullanıcı arayüzünde yön
+   seçimi gösterilmez. Aynı ayar yatay ve dikey iOS ekranlarında kullanılır.
+3. **iOS Kontrolünü Başlat** düğmesine basın ve Pardus parola penceresini onaylayın.
+4. iPad veya iPhone'da **Ayarlar → Bluetooth → CommunicatePars** cihazına dokunun.
+5. Önceki sürümle başarısız eşleştirme varsa iOS aygıtında cihazı **Bu Aygıtı Unut**
    ile silip yeniden eşleştirin.
-5. Mouse'u Pardus'a geri vermek için **Sol Ctrl+K** kullanın. Kapatırken iki
+6. Mouse'u Pardus'a geri vermek için mouse'a dokunmadan **Sol Ctrl+K**
+   tuşlarına basın. Kapatırken iki
    ayrı Pardus yönetici parola penceresi çıkabilir; mouse çalışmadığı için
    parolayı klavyeyle yazıp Enter'a basın. İlk işlem yalnızca paket içindeki
    `hidclient` sürecini doğrudan `SIGKILL (-9)` ile keser. İkinci işlem seçtiğiniz

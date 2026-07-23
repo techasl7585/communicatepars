@@ -140,6 +140,11 @@ fi
 HIDCLIENT="$PROJECT_DIR/tools/hidclient/hidclient"
 if [ -x "$HIDCLIENT" ]; then
   ok "hidclient bulundu ve çalıştırılabilir"
+  if "$HIDCLIENT" --help 2>/dev/null | grep -Fq -- '--rotate-cw'; then
+    ok "hidclient dikey iPhone eksen düzeltmesini destekliyor"
+  else
+    error "hidclient dikey iPhone desteği olmadan derlenmiş; ./install-pardus.sh çalıştırın"
+  fi
   if command -v ldd >/dev/null 2>&1; then
     MISSING_LIBS="$(ldd "$HIDCLIENT" 2>/dev/null | awk '/not found/{print $1}' | paste -sd ', ' -)"
     if [ -n "$MISSING_LIBS" ]; then

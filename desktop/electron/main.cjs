@@ -92,7 +92,7 @@ async function stopIpadControlFromShortcut() {
       void dialog.showMessageBox({
         type: "error",
         title: "Mouse geri alınamadı",
-        message: "Ctrl+K mouse'u geri alamadı",
+        message: "Mouse'a dokunmadan Ctrl+K yapmanız gerekmektedir",
         detail: message,
       });
     }

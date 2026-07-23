@@ -4,6 +4,7 @@ import logo from "./assets/logo.png";
 
 const API_URL = "http://127.0.0.1:5050";
 const DEFAULT_INPUT_EVENT = "8";
+const FIXED_POINTER_ORIENTATION = "landscape";
 const isSelectableInput = (device) => Boolean(
   device && (
     typeof device.selectable === "boolean"
@@ -239,7 +240,10 @@ function App() {
       const control = await requestJson("/ipad/control/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventNumber: selectedEvent }),
+        body: JSON.stringify({
+          eventNumber: selectedEvent,
+          pointerOrientation: FIXED_POINTER_ORIENTATION,
+        }),
       });
       setIpadControlActive(Boolean(control.active));
       setIpadBluetoothConnected(Boolean(control.connected));
@@ -249,7 +253,7 @@ function App() {
       const pairing = await requestJson("/bluetooth/pairing/start", { method: "POST" });
       setBluetoothPairingActive(Boolean(pairing.active));
       setStatus(
-        "Bluetooth HID hazır. iPad'de Ayarlar → Bluetooth → CommunicatePars cihazına dokunun. Mouse'u geri alma: Sol Ctrl + K."
+        "Bluetooth HID hazır. iPad'de Ayarlar → Bluetooth → CommunicatePars cihazına dokunun. Mouse'u geri almak için mouse'a dokunmadan Sol Ctrl + K tuşlarına basın."
       );
     } catch (error) {
       console.error(error);
@@ -268,7 +272,7 @@ function App() {
 
       if (controlReallyActive) {
         setStatus(
-          "Mouse kontrolü aktif. AirPlay güvenlik için açık bırakıldı; kapatmak için oturum düğmesini veya Sol Ctrl + K kullan."
+          "Mouse kontrolü aktif. AirPlay güvenlik için açık bırakıldı; kapatmak için oturum düğmesini kullanın veya mouse'a dokunmadan Sol Ctrl + K tuşlarına basın."
         );
       } else {
         setIpadControlActive(false);
@@ -328,7 +332,7 @@ function App() {
       console.error(mouseRestoreError);
       // Mouse geri yükleme başarısızsa AirPlay'e hiçbir kapatma isteği gönderilmez.
       setStatus(
-        `${mouseRestoreError.message || "Mouse geri yüklenemedi"}. AirPlay güvenlik için açık bırakıldı; Sol Ctrl + K kullan.`
+        `${mouseRestoreError.message || "Mouse geri yüklenemedi"}. AirPlay güvenlik için açık bırakıldı; mouse'a dokunmadan Sol Ctrl + K tuşlarına basın.`
       );
     } finally {
       setIosSessionBusy(false);
@@ -378,7 +382,10 @@ function App() {
       const data = await requestJson("/ipad/control/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventNumber: selectedEvent }),
+        body: JSON.stringify({
+          eventNumber: selectedEvent,
+          pointerOrientation: FIXED_POINTER_ORIENTATION,
+        }),
       });
 
       setIpadControlActive(Boolean(data.active));
@@ -811,7 +818,7 @@ function App() {
                   visibility: "visible",
                 }}
               >
-                Sistemi kapatıp seçili mouse'u Pardus'a geri almak için Sol Ctrl+ K kullanın. Mouse Kilitli Olduğu İçin Yönetici Parolarını Enter Tuşuyla Onaylayın.
+                Mouse'u Pardus'a geri almak için mouse'a dokunmadan Sol Ctrl + K tuşlarına basmanız gerekmektedir. Yönetici parolalarını klavyeyle yazıp Enter tuşuyla onaylayın.
               </p>
             </div>
             <div className="ipad-content">
@@ -838,44 +845,49 @@ function App() {
                       <pre>{inputDevices}</pre>
                     </div>
                   )}
-                  <div className="event-input">
-                    {inputDeviceOptions.length > 0 ? (
-                      <select
-                        value={inputDeviceOptions.some(
-                          (device) => String(device.eventNumber) === inputEvent && isSelectableInput(device)
-                        ) ? inputEvent : ""}
-                        disabled={ipadControlActive || iosSessionBusy}
-                        onChange={(event) => setInputEvent(event.target.value)}
-                        aria-label="Mouse input aygıtı"
-                      >
-                        <option value="" disabled>Mouse event aygıtını seçin</option>
-                        {inputDeviceOptions.map((device) => (
-                          <option
-                            key={device.eventNumber}
-                            value={device.eventNumber}
-                            disabled={!isSelectableInput(device)}
+                  <section className="mouse-event-setting" aria-labelledby="mouse-event-title">
+                      <div className="setting-heading">
+                        <span className="setting-kicker">Kontrol aygıtı</span>
+                        <strong id="mouse-event-title">Mouse event seçimi</strong>
+                        <small>Listeden seçtiğiniz mouse kullanılır.</small>
+                      </div>
+                      <div className="event-input">
+                        {inputDeviceOptions.length > 0 ? (
+                          <select
+                            value={inputDeviceOptions.some(
+                              (device) => String(device.eventNumber) === inputEvent && isSelectableInput(device)
+                            ) ? inputEvent : ""}
+                            disabled={ipadControlActive || iosSessionBusy}
+                            onChange={(event) => setInputEvent(event.target.value)}
+                            aria-label="Mouse input aygıtı"
                           >
-                            {isSelectableInput(device) ? "+" : "-"} event{device.eventNumber} — {device.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <>
-                        <span>event</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="9999"
-                          value={inputEvent}
-                          placeholder="otomatik"
-                          disabled={ipadControlActive || iosSessionBusy}
-                          onChange={(event) => setInputEvent(event.target.value)}
-                        />
-                      </>
-                    )}
-                  </div>
-                  <p className="input-device-note">
-                  </p>
+                            <option value="" disabled>Mouse event aygıtını seçin</option>
+                            {inputDeviceOptions.map((device) => (
+                              <option
+                                key={device.eventNumber}
+                                value={device.eventNumber}
+                                disabled={!isSelectableInput(device)}
+                              >
+                                {isSelectableInput(device) ? "+" : "-"} event{device.eventNumber} — {device.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <>
+                            <span>event</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="9999"
+                              value={inputEvent}
+                              placeholder="otomatik"
+                              disabled={ipadControlActive || iosSessionBusy}
+                              onChange={(event) => setInputEvent(event.target.value)}
+                            />
+                          </>
+                        )}
+                      </div>
+                  </section>
                 </div>
               </article>
 
@@ -893,8 +905,8 @@ function App() {
  <strong style={{ color: "#fbbf24" }}>
     Önemli Uyarı:
   </strong>{" "}
-  Sol CTRL + K yapıp çıkarken şifre ekranında mouse çalışmayacağından
-  şifre girdikten sonra Enter'a basın.              (Şifreden 3 Saniye Sonra Mouse Geri Gelecek)     
+  Mouse'u geri alırken mouse'a dokunmadan Sol Ctrl + K tuşlarına basın.
+  Parolayı klavyeyle yazıp Enter'a basın. Mouse yaklaşık 3 saniye içinde geri gelecektir.
 </p>
                   <div className="control-buttons">
                     <button
@@ -916,7 +928,7 @@ function App() {
                 <h3>Kullanım Kılavuzu</h3>
                 <ol>
                   <li>iOS Ayarlar → Erişilebilirlik → Dokunma bölümünden AssistiveTouch açılır.</li>
-                  <li>Mouse kontrolü olmadan sadece ekranı görmek istediğinizde kontrol geldikten sonra sol ctrl + k yapın</li>
+                  <li>Mouse'u geri almak istediğinizde mouse'a dokunmadan Sol Ctrl + K tuşlarına basın.</li>
                   <li>Eğer Fare Yavaşsa AssistiveTouch ayarlarından işaretçi hızı ayarlanabilir</li>
                   <li>Touchpad desteklenmez</li>
 
@@ -1517,7 +1529,7 @@ iOS bağlantısını tamamla
                   Sistemi Kapatıp Mouse'u PC'ye geri almak için
                 </strong>
                 <span style={{ fontSize: "18px" }}>
-                  Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas. Parola pencerelerini de klavyeyle onayla: 3 saniye sonra mouse aygıtı donanımsal olarak yeniden bağlanır.
+                  Mouse'a dokunmadan Pardus klavyesinde <strong>Sol Ctrl + K</strong> tuşlarına bas. Parola pencerelerini de klavyeyle onayla: 3 saniye sonra mouse aygıtı donanımsal olarak yeniden bağlanır.
                 
                 </span>
               </div>
