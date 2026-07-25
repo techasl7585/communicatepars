@@ -39,7 +39,7 @@ chmod +x install-pardus.sh start-communicatepars.sh check-system.sh
 ./install-pardus.sh
 ```
 
-Kurulum Bitince CommunicatePars'ı Pardus uygulamalar menüsüne ve masaüstüne ekler Kurulum Bitince eğer X11 masaüstü ortamına geçmediyseniz aşağıdaki adımlarla geçin yoksa ios kontrol özelliği çalışmaz. Geçtikten sonta uygulamayı sorunsuz şekilde çalıştırabilirsiniz.
+Kurulum Bitince CommunicatePars'ı Pardus uygulamalar menüsüne ve masaüstüne ekler Kurulum Bitince eğer X11 masaüstü ortamına geçmediyseniz aşağıdaki adımlarla geçin yoksa ios kontrol özelliği çalışmaz. Geçtikten sonra uygulamayı sorunsuz şekilde çalıştırabilirsiniz.
 
 ## X11 Masaüstü Ortamına Geçiş (İos Kontrol Özelliğinin Çalışması İçin)
 
