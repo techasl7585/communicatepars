@@ -1,12 +1,15 @@
-# CommunicatePars 1.3.5 — Pardus kurulumu
+# CommunicatePars Pardus kurulum Şartları
 
-Kurulum paketi ilk çalıştırıldığı klasörü otomatik algılar. İndirilen klasörün
-adı veya dili önemli değildir; `İndirilenler`, `Downloads` ya da başka bir
-konumdan çalıştırılabilir.
+• İnternet Bağlantısı (İnternet kesilirse kurulum kesilir yeniden başlatın aynı şekilde)
+• İos Kontrolü İçin X11 Masaüstü Ortamına Geçmeniz Gerekmektedir Aşağıda Geçiş adımları anlatılmıştır
+• Pardus GNOME
+• Bilgisayarınızda Bluetooth Ve Wifi Özelliğinin Olması Gerekir Özelliklerin Çalışması İçin
+
 
 ## İlk kurulum
 
-ZIP dosyasını çıkardıktan sonra terminali proje klasöründe açın:
+Uygulamayı Kurmak için sağ üst köşedeki yeşil code kısmından "download zip" basıp indirin indirdiğiniz
+ZIP dosyasını çıkardıktan sonra proje klasörüne girin ve terminalde şu komutları girin:
 
 ```bash
 chmod +x install-pardus.sh start-communicatepars.sh check-system.sh
