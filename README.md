@@ -1,5 +1,7 @@
 # CommunicatePars Pardus Cihaz Bağlantı Merkezi
 
+CommunicatePars, Pardus işletim sistemi için geliştirilen açık kaynaklı bir cihaz entegrasyon uygulamasıdır. Android, iOS ve diğer ağ cihazlarıyla dosya paylaşımı, ekran yansıtma, uzaktan kontrol ve ikinci ekran gibi özellikleri tek bir arayüz altında sunmayı amaçlar.
+
 - CommunicatePars; İos Kontrol Özelliği İçerisinde İphone veya İpad cihazınızın ekranını pardustan görüp ve pardus üzerinden cihazı Kontrol etmeyi aynı anda sağlayan ilk defa bizim yaptığımız ios kontrol yazılımını barındırıyor.
 
 - Ayrıca İkinci Ekran Özelliği içerisinde bilgisayarınız için diğer cihazınızı ikinci ekran olarak kullanabileceğiniz veya diğer cihazınızdan bilgisayarınızı dokunmatik olarak veya kalem destekli (apple pencil Samsung Spen veya farklı tablet ve kalemleri) kontrol imkanı sunuyor.
