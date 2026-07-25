@@ -1,167 +1,62 @@
-# CommunicatePars Pardus kurulum Şartları
+# CommunicatePars Pardus Cihaz Bağlantı Merkezi
 
-• İnternet Bağlantısı (İnternet kesilirse kurulum kesilir yeniden başlatın aynı şekilde)
-• İos Kontrolü İçin X11 Masaüstü Ortamına Geçmeniz Gerekmektedir Aşağıda Geçiş adımları anlatılmıştır
-• Pardus GNOME
-• Bilgisayarınızda Bluetooth Ve Wifi Özelliğinin Olması Gerekir Özelliklerin Çalışması İçin
+- CommunicatePars; İos Kontrol Özelliği İçerisinde İphone veya İpad cihazınızın ekranını pardustan görüp ve pardus üzerinden cihazı Kontrol etmeyi aynı anda sağlayan ilk defa bizim yaptığımız ios kontrol yazılımını barındırıyor.
+
+- Ayrıca İkinci Ekran Özelliği içerisinde bilgisayarınız için diğer cihazınızı ikinci ekran olarak kullanabileceğiniz veya diğer cihazınızdan bilgisayarınızı dokunmatik olarak veya kalem destekli (apple pencil Samsung Spen veya farklı tablet ve kalemleri) kontrol imkanı sunuyor.
+
+- Dosya Paylaşım Bölümde ise pardus ağı üzerinden wifi bağlanan her türlü cihaza yüksek hızlı dosya paylaşım imkanı sunuyor.
+
+- Android kontrol bölümde ise android cihazınızı kablolu veya kablosuz olarak tek tuşla kontrol edebilirsiniz.
+
+- İçerisindeki whatsapp paneli sayesinde whatsapp mesajlarınızı yönetebilirsiniz.
+
+- Ana ekranda bağlı bluetooth cihazlarınızın ve fare gibi çevre birimlerinizin pil durumunu görebilirsiniz
+
+- Bu Uygulama İçerisindeki Güçlü Özellikler İle Cihazlar Arası İşlemlerinizi Daha Hızlı Ve Pratik Şekilde Yönetmenize İmkan Sağlar
+
+## Gereksinimler
+
+- Kurulum İçin İnternet Bağlantısı (İnternet kesilirse kurulum kesilir bu durumda kurulumu yeniden başlatın tarif edilen şekilde)
+  
+- İos Kontrolü Çalışması İçin X11 Masaüstü Ortamına Geçmeniz Gerekmektedir Aşağıda Geçiş adımları anlatılmıştır
+  
+- Pardus GNOME
+  
+- Bilgisayarınızda Bluetooth Ve Wifi Özelliğinin Olması Gerekir Özelliklerin Çalışması İçin
+  
+- İos Kontrolü İçin usb Fare (Touchpad desteklenmiyor , bluetooth fare test edilmedi)
+
+
 
 
 ## İlk kurulum
 
-Uygulamayı Kurmak için sağ üst köşedeki yeşil code kısmından "download zip" basıp indirin indirdiğiniz
-ZIP dosyasını çıkardıktan sonra proje klasörüne girin ve terminalde şu komutları girin:
+Uygulamayı Kurmak için github üzerinden sağ üst köşedeki yeşil code kısmından "download zip" basıp indirin indirdiğiniz
+ZIP dosyasını çıkardıktan sonra çıkarttığınız klasöre girin ve terminalde şu komutları girin:
 
 ```bash
 chmod +x install-pardus.sh start-communicatepars.sh check-system.sh
 ./install-pardus.sh
 ```
 
-Kurulum Weylus Community Edition, `/dev/uinput` izinleri ve Bluetooth HID
-uyumluluk ayarını da otomatik hazırlar. Uygulama kullanıcının sabit kurulum
-dizinine kopyalanır:
+Kurulum Bitince CommunicatePars'ı Pardus uygulamalar menüsüne ve masaüstüne ekler Kurulum Bitince eğer X11 masaüstü ortamına geçmediyseniz aşağıdaki adımlarla geçin yoksa ios kontrol özelliği çalışmaz. Geçtikten sonta uygulamayı sorunsuz şekilde çalıştırabilirsiniz.
 
-```text
-~/.local/opt/communicatepars
-```
+## X11 Masaüstü Ortamına Geçiş (İos Kontrol Özelliğinin Çalışması İçin)
 
-Kurulum ayrıca CommunicatePars'ı Pardus uygulamalar menüsüne ekler, simgesini
-kurar ve masaüstü klasörü etkinse masaüstü kısayolu oluşturur. Kurulum
-tamamlandıktan sonra indirilen ZIP ve çıkartılan kaynak klasörü silinebilir.
+- Uçbirimi (Terminali) açın.
 
-Tamamlandıktan sonra bir kez oturumu kapatıp açın (en güvenlisi bilgisayarı
-yeniden başlatmaktır), ardından kontrol edin:
+- Pardus GNOME İçin: Terminale Kodu girin ve enter'a basın: sudo nano /etc/gdm3/daemon.conf
+  
+- Açılan metin editöründe #waylandEnable=false satırını bulun
+ve yön oklarıyla # işaretinini bi yanına gelerek başındaki # işaretini silerek
+waylandEnable=false haline getirin.
+(Eger bu satir yoksa [daemon] veya
+[seat:*] bölümünün altına ekleyin).
 
-```bash
-~/.local/opt/communicatepars/check-system.sh
-```
+- Dosyayı kaydedip çikmak için Ctrl + O, Enter ve ardından Ctrl + X tuslarına basın.
+  
+- Değişikliklerin Çalışması için bilgisayarınızı yeniden başlatın.
 
-`Sonuç: 0 hata` görülüyorsa Pardus uygulamalar menüsünden **CommunicatePars**
-uygulamasını açın. Terminalden açmak gerekirse:
 
-```bash
-~/.local/bin/communicatepars
-```
+  
 
-Eski çıkartılmış klasördeki `check-system.sh` veya `start-communicatepars.sh`
-komutları da kurulu kopyayı bulursa otomatik olarak sabit kurulum dizinine
-yönlenir.
-
-## Güncelleme
-
-Yeni sürümün ZIP dosyasını herhangi bir klasöre çıkartıp
-`./install-pardus.sh` komutunu yeniden çalıştırın. Sabit kurulum dizini,
-uygulama menüsü, simge ve masaüstü kısayolu yeni sürüme göre güncellenir.
-
-## Gereksinimler
-
-- Pardus/Debian tabanlı x86_64 bilgisayar
-- Node.js 20.19+, 22.12+ veya daha yeni sürüm
-- iPad kontrolü için çalışan Bluetooth adaptörü
-- Grafik masaüstü oturumu (X11 veya XWayland)
-
-Kurulum betiği paketteki `hidclient` kaynak kodunu x86_64 için derler.
-`build-essential`, `libbluetooth-dev` ve çalışma sırasında gereken
-`libbluetooth3` paketleri otomatik kurulur; son kullanıcının ayrıca paket
-kurması gerekmez.
-
-## iPad mouse kontrolü
-
-1. Geliştirme bilgisayarındaki çalışan ayar korunarak varsayılan mouse girişi
-   **event8** yapılmıştır. Farklı bir bilgisayarda mouse numarası değişirse
-   **Aygıtları Göster** düğmesi aygıt listesini yeniler ancak otomatik seçim
-   yapmaz. Listede `+` seçilebilir mouse'u, `-` seçilemeyen aygıtı gösterir.
-   Kullanacağınız `+` işaretli event'i menüden kendiniz seçmelisiniz. Yalnızca
-   bu seçim iOS kontrolüne gönderilir ve kapatırken aynı aygıt geri bağlanır;
-   uygulama başka bir event'e kendiliğinden geçmez.
-   **Touchpad desteklenmez**; harici USB veya Bluetooth mouse kullanın.
-2. Mouse yönü çalışan yatay ayarda sabitlenmiştir ve kullanıcı arayüzünde yön
-   seçimi gösterilmez. Aynı ayar yatay ve dikey iOS ekranlarında kullanılır.
-3. **iOS Kontrolünü Başlat** düğmesine basın ve Pardus parola penceresini onaylayın.
-4. iPad veya iPhone'da **Ayarlar → Bluetooth → CommunicatePars** cihazına dokunun.
-5. Önceki sürümle başarısız eşleştirme varsa iOS aygıtında cihazı **Bu Aygıtı Unut**
-   ile silip yeniden eşleştirin.
-6. Mouse'u Pardus'a geri vermek için mouse'a dokunmadan **Sol Ctrl+K**
-   tuşlarına basın. Kapatırken iki
-   ayrı Pardus yönetici parola penceresi çıkabilir; mouse çalışmadığı için
-   parolayı klavyeyle yazıp Enter'a basın. İlk işlem yalnızca paket içindeki
-   `hidclient` sürecini doğrudan `SIGKILL (-9)` ile keser. İkinci işlem seçtiğiniz
-   event'in gerçek USB üst aygıtını sürücüden ayırıp bir saniye sonra yeniden
-   bağlar. Son olarak aynı event XInput ana işaretçisine eklenir. USB olmayan
-   mouse'larda udev ve XInput geri yükleme yolu otomatik kullanılır.
-
-Eşleştirme düğmesi BlueZ `NoInputNoOutput` agent'ının kaydolmasını bekler, onu
-varsayılan agent yapar ve görünürlüğü ancak bundan sonra açar. Bazı BlueZ
-sürümlerinin yine de metin olarak sorduğu iOS onayı, yalnızca uygulamadaki üç
-dakikalık eşleştirme penceresinde otomatik kabul edilir. Böylece masaüstü
-agent'ına düşen ve 30 saniye sonra `Authentication Failure (0x05)` oluşturan
-yarış durumu engellenir.
-
-Kurulum, Bluetooth servisini yeniden başlattıktan sonra adaptörün hazır olmasını
-10 saniyeye kadar bekler. Böylece bazı bilgisayarlarda görülen, hemen ardından
-sistem kontrolü başarılı olduğu hâlde kurulum sırasında çıkan geçici
-`Bluetooth adaptörü açılamadı` hatası oluşmaz.
-
-Bluetooth HID desteği için kurulum, BlueZ'i `--compat
---noplugin=input,hostname` seçenekleriyle çalıştırır. `hostname` eklentisinin
-sınıfı yeniden PC/laptop olarak değiştirmesi engellenir ve Bluetooth sınıfı
-`0x0005C0` (klavye + işaretçi çevre birimi) olarak korunur. Uygulama,
-`hidclient` HID hizmet kaydını oluşturduktan sonra Bluetooth servisini yeniden
-başlatmaz; böylece iPad'in bağlandığı SDP kaydı kaybolmaz.
-
-`bluetoothctl` içindeki `AlreadyExists` mesajı cihazın zaten
-eşleşmiş olduğunu gösterir; PC tarafından tekrar `pair` komutu vermeyin.
-CommunicatePars HID özelliğini tamamen kaldırmak ve BlueZ varsayılanına dönmek
-isterseniz:
-
-```bash
-sudo rm /etc/systemd/system/bluetooth.service.d/communicatepars-hid.conf
-sudo cp /etc/bluetooth/main.conf.communicatepars-backup /etc/bluetooth/main.conf
-sudo systemctl daemon-reload
-sudo systemctl restart bluetooth
-```
-
-## Weylus ile iPad/tablet bağlantısı
-
-1. Pardus bilgisayar ve iPad'i aynı, güvendiğiniz yerel ağa bağlayın.
-2. Uygulamada **İkinci Ekran → Başlat** düğmesine basıp **Weylus Açık** durumunu
-   bekleyin.
-3. Gösterilen `http://BILGISAYAR_IP:1701` adresini iPad'de Safari ile açın.
-   iPad'e ayrıca bir uygulama kurmanız gerekmez.
-4. Safari'deki Weylus sayfasından aktarılacak ekranı veya pencereyi seçin ve
-   bağlantıyı başlatın. Dokunma/kalem seçeneklerini aynı sayfadan açabilirsiniz.
-5. Basınç, eğim ve çoklu dokunma çalışmıyorsa kurulumdan sonra Pardus oturumunu
-   kapatıp yeniden açın; bu işlem `/dev/uinput` grup iznini etkinleştirir.
-6. iPad'de tam ekran için Safari'nin **Paylaş → Ana Ekrana Ekle** seçeneğini
-   kullanabilirsiniz.
-
-Weylus arayüzü bilgisayarda ayrıca açılmaz; uygulama onu `--no-gui` kipinde
-başlatır. Kurulum `/dev/uinput` iznini, Wayland/X11 desteğini ve etkin güvenlik
-duvarında TCP 1701/9001 kurallarını hazırlar. Weylus trafiği şifrelenmediğinden
-yalnızca güvendiğiniz ağlarda kullanın. Weylus varsayılan olarak mevcut ekranı
-veya pencereyi aktarır; tek başına yeni bir sanal monitör oluşturmaz.
-
-## Diğer özellikler
-
-Ana uygulama bunlar olmadan açılır; yalnızca ilgili bölüm çalışmaz:
-
-- Android kontrolü: `adb` ve `scrcpy`
-- iPad ekran yansıtma: `uxplay`
-- İkinci ekran: Weylus Community Edition Flatpak sürümü (otomatik kurulur)
-
-Kurulum betiği Pardus deposunda bulunmayan `scrcpy` için resmî, SHA-256 ile
-doğrulanan x86_64 sürümünü kurar. UxPlay depoda varsa otomatik kurulur. Weylus
-Community Edition Flathub üzerinden kullanıcı hesabına otomatik kurulur.
-
-## Hata günlüğü
-
-Sunucu açılmazsa şu dosyaya bakın:
-
-```text
-~/.local/state/communicatepars/server.log
-```
-
-Kurulum ve sistem çıktısını paylaşırsanız sorunu nokta atışı belirlemek için şu komutu kullanın:
-
-```bash
-./check-system.sh 2>&1 | tee communicatepars-system-check.txt
-```
