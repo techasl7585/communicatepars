@@ -21,6 +21,8 @@ CommunicatePars, Pardus GNOME işletim sistemi için geliştirilen açık kaynak
 - Kurulum İçin İnternet Bağlantısı (İnternet kesilirse kurulum kesilir bu durumda kurulumu yeniden başlatın tarif edilen şekilde)
   
 - İos Kontrolü Çalışması İçin X11 Masaüstü Ortamına Geçmeniz Gerekmektedir Aşağıda Geçiş adımları anlatılmıştır
+
+- amd64 64 Bit İşlemci
   
 - Pardus GNOME
   
